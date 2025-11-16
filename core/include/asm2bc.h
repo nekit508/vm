@@ -1,15 +1,14 @@
 #pragma once
-#include <cstdint>
 #include <fstream>
 #include <map>
 #include <vector>
 
 #define opcode(c) vm::tr::write(code, c)
 #define param_d64() vm::tr::param<uint64_t>(code, code_symbols, vm::tr::get_word(line), [](const std::string &str) { return std::stoul(str); })
-#define param_s64() vm::tr::write(code, static_cast<uint64_t>(std::stoul(get_word(line))))
-#define param_s32() vm::tr::write(code, static_cast<uint32_t>(std::stoul(get_word(line))))
-#define param_s16() vm::tr::write(code, static_cast<uint16_t>(std::stoul(get_word(line))))
-#define param_s8() vm::tr::write(code, static_cast<uint8_t>(std::stoul(get_word(line))))
+#define param_s64() vm::tr::write(code, static_cast<uint64_t>(std::stoul(vm::tr::get_word(line))))
+#define param_s32() vm::tr::write(code, static_cast<uint32_t>(std::stoul(vm::tr::get_word(line))))
+#define param_s16() vm::tr::write(code, static_cast<uint16_t>(std::stoul(vm::tr::get_word(line))))
+#define param_s8() vm::tr::write(code, static_cast<uint8_t>(std::stoul(vm::tr::get_word(line))))
 
 namespace vm::tr {
     typedef void(*op_encoder)(std::vector<char> &code, std::vector<char> &code_symbols, std::string &line);

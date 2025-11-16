@@ -5,6 +5,9 @@
 #include "buffer.h"
 #include "ops.h"
 
+#define to_ptr(type, ptr) reinterpret_cast<type *>(ptr)
+#define code_at(ctx, addr) ctx->code.read_pos = reinterpret_cast<char *>(addr) - ctx->code.data
+
 namespace vm {
     struct context;
 

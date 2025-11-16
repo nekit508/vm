@@ -27,7 +27,7 @@ void vm::exec_operation(context *ctx) {
     uint16_t opcode;
     ctx->code >> opcode;
 
-    std::cout << "opcode: " << opcode << std::endl;
+    //std::cout << "opcode: " << opcode << std::endl;
 
     if (!handlers.contains(opcode)) {
         std::cerr << "opcode " << opcode << " was not processed" << std::endl;
