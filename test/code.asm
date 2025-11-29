@@ -1,17 +1,12 @@
-.const-pool
-start = "Your input is ""
-end = "".\n"
-
 .code
-
+:main
 :restart
 load64c 8
 load64c 0
 write64s64s
 
 :read
-load64c $std_cin_char
-calln64s
+call64c $:read_char
 load64c 0
 read6464s
 write64s8s
@@ -43,20 +38,10 @@ read6464s
 sub64c64s 1
 write64s8s
 
-load64c $start
-load64c $std_cout_str
-calln64s
-
 load64c 8
-mapmem64s
-load64c $std_cout_str
-calln64s
-
-load64c $end
-load64c $std_cout_str
-calln64s
+mapmem6464s
+call64c $:print
 
 jmp64c $:restart
-end
 :end
 end

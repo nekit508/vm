@@ -1,38 +1,41 @@
 #include "vm.h"
 
-#include <cstdint>
+
 #include <iostream>
 
-void vm::allocate_stack(context *ctx) {
-    size_t size = 1024;
-    ctx->stack = utils::buffer(static_cast<char *>(malloc(size)), size);
+/*void vm::frame_t::tick() {
+
 }
 
-void vm::init(context *ctx) {
-    allocate_stack(ctx);
-    ctx->memory = static_cast<char *>(malloc(1024 * 1024));
-}
-
-void vm::dispose(context *ctx) {
-    // TODO here is memory and stack snapshot
-    std::fstream stream("memory.dump", std::ios_base::out | std::ios_base::binary);
-    stream.write(ctx->memory, 1024 * 1024);
-    stream.close();
-    ctx->stack.dump("stack.dump");
-
-    free(ctx->memory);
-}
-
-void vm::exec_operation(context *ctx) {
+void vm::context_t::tick() {
     uint16_t opcode;
-    ctx->code >> opcode;
-
-    //std::cout << "opcode: " << opcode << std::endl;
+    code >> opcode;
 
     if (!handlers.contains(opcode)) {
         std::cerr << "opcode " << opcode << " was not processed" << std::endl;
         raise(SIGILL);
     } else {
-        handlers[opcode](ctx);
+        handlers[opcode](this);
     }
 }
+
+void vm::context_t::next_frame(frame_t *frame) {
+    frame->previous_frame = frame;
+    cf = frame;
+
+    cf->return_addr = code.read_pos + 1;
+}
+
+void vm::context_t::prev_frame() {
+    const frame_t *old_frame = cf;
+    cf = old_frame->previous_frame;
+
+    code.read_pos = cf->return_addr;
+
+    delete old_frame;
+}
+
+vm::context_t::~context_t() {
+    delete cf;
+}
+*/

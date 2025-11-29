@@ -1,37 +1,39 @@
 #pragma once
 
-#include <map>
+#include <vector>
 
-#include "buffer.h"
-#include "ops.h"
-
-#define to_ptr(type, ptr) reinterpret_cast<type *>(ptr)
-#define code_at(ctx, addr) ctx->code.read_pos = reinterpret_cast<char *>(addr) - ctx->code.data
+#include "memory.h"
 
 namespace vm {
-    struct context;
+    struct environment_t {
 
-    typedef void(*bindable)(context *ctx);
-    typedef void(*op_handler)(context *ctx);
-
-    struct context {
-        utils::straight_buffer code{1024 * 1024};
-        utils::straight_buffer const_pool{1024 * 1024};
-        utils::buffer stack;
-        char *memory;
-        // name : ptr
-        std::map<std::string, size_t> symbol_table;
-        bool stop = false;
     };
 
-    inline std::map<opcode_t, op_handler> handlers;
-    inline context *C;
+    struct sym_table_t {
 
-    void allocate_stack(context *ctx);
+    };
 
-    void init(context *ctx);
+    struct frame_prototype_t {
+        utils::memory_t<> code;
+    };
 
-    void dispose(context *ctx);
+    struct frame_t {
+        frame_prototype_t *prototype;
+        addr_t code_pos;
 
-    void exec_operation(context *ctx);
+        frame_t *parent;
+    };
+
+    struct thread_t {
+        frame_t *frame;
+    };
+
+    struct context_t {
+        utils::memory_t<> heap;
+        utils::memory_t<> ro_data;
+
+        sym_table_t sym_table;
+        std::vector<frame_prototype_t> frame_prototypes;
+        std::vector<thread_t> threads;
+    };
 }

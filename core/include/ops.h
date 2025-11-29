@@ -1,6 +1,6 @@
 #pragma once
-
 #include <cstdint>
+
 
 /** Operation encoding
  *
@@ -46,7 +46,7 @@ new_opcode(add64c64s, 16);
 new_opcode(sub64s64s, 24);
 new_opcode(sub64c64s, 25); // b - a
 
-new_opcode(mapmem64s, 17);
+new_opcode(mapmem6464s, 17);
 
 new_opcode(cmpeq64s64s, 18);
 new_opcode(cmpeq32s32s, 19);
@@ -59,5 +59,9 @@ new_opcode(jmpt8s64c, 23);
 new_opcode(jmpf8s64c, 26);
 
 new_opcode(shrink64c64s, 27);
+
+new_opcode(call64c, 30);
+new_opcode(call64s, 31);
+new_opcode(ret, 32);
 
 #undef new_opcode
