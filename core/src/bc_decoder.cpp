@@ -1,11 +1,12 @@
 #include "bc_decoder.h"
 
-#include <cstdint>
+
 #include <iostream>
 #include <stack>
+#include <vector>
 
-namespace vm::bcd {
-    std::string read_str(utils::buffer &buffer) {
+/*namespace vm::bcd {
+    std::string read_str(utils::stack_t &buffer) {
         std::string out;
         uint8_t c;
         while (true) {
@@ -17,21 +18,21 @@ namespace vm::bcd {
         return out;
     }
 
-    void load(context *ctx, const char *file) {
+    void load(context_t *ctx, const char *file) {
         std::fstream byte_code(file, std::ios_base::binary | std::ios_base::in | std::ios_base::ate);
         const size_t file_size = byte_code.tellg();
         char *ptr = static_cast<char *>(malloc(file_size));
         byte_code.seekg(0);
         byte_code.readsome(ptr, file_size);
-        utils::buffer buffer{ptr, file_size, ptr};
+        utils::stack_t buffer{ptr, file_size, ptr};
 
         std::vector<size_t> code_symbols_positions;
         std::vector<std::string> code_symbols;
 
     symbol_table: {
             // read symbol table into temporary map
-            size_t const_pool_offset = reinterpret_cast<size_t>(ctx->const_pool.data) + ctx->const_pool.write_pos;
-            size_t code_offset = reinterpret_cast<size_t>(ctx->code.data) + ctx->code.write_pos;
+            size_t const_pool_offset = reinterpret_cast<size_t>(ctx->ro_data.data) + ctx->ro_data.write_pos;
+            size_t code_offset = ctx->code.write_pos;
 
             size_t block_size;
             buffer >> block_size;
@@ -65,7 +66,7 @@ namespace vm::bcd {
             size_t block_size;
             buffer >> block_size;
             for (size_t i = 0; i < block_size; i++) {
-                buffer >> *(ctx->const_pool.data + ctx->const_pool.write_pos++);
+                buffer >> *(ctx->ro_data.data + ctx->ro_data.write_pos++);
             }
         }
 
@@ -105,7 +106,5 @@ namespace vm::bcd {
                 }
             }
         }
-
-        return;
     }
-}
+}*/
