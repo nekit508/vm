@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -37,6 +38,11 @@ namespace vm::utils {
         T *operator[](addr_t index);
     };
 
+    /** There are three type of insert functions:
+     * - emplace - creates new object in new cell at index and calls a move constructor
+     * - push - creates new object in new cell at index and calls a copy constructor
+     * - place - creates new object in old cell and calls a move constructor
+     */
     template<typename T, size_t block_size>
     struct vector_t {
         size_t size = 0, capacity;
@@ -50,32 +56,51 @@ namespace vm::utils {
         vector_t() : vector_t(block_size) {
         }
 
-        vector_t &operator=(const vector_t &other) {
+        slice_t<T> operator[](const addr_t from, const addr_t to) {
+            return slice_t<T>(this, from, to);
+        }
+
+        T &operator[](const addr_t ind) {
+            return *(data + ind);
+        }
+
+        vector_t(const vector_t &other)
+            : size(other.size),
+              capacity(other.size),
+              data(static_cast<T *>(malloc(sizeof(T) * capacity))) {
+            for (int i = 0; i < other.size; ++i) place(i, T(*(other.data + i)));
+        }
+
+        vector_t(vector_t &&other) noexcept
+            : size(other.size),
+              capacity(other.size),
+              data(other.data) {
+            other.data = nullptr;
+        }
+
+        vector_t & operator=(vector_t &&other) noexcept {
             if (this == &other)
                 return *this;
             size = other.size;
             capacity = other.size;
-            memcpy(data, other.data, capacity);
-            fputs("copy", stdout);
-            return *this;
-        }
 
-        vector_t &operator=(vector_t &&other) noexcept {
-            if (this == &other)
-                return *this;
-            size = other.size;
-            capacity = other.capacity;
+            free(data);
             data = other.data;
             other.data = nullptr;
             return *this;
         }
 
-        vector_t(const vector_t &other) : vector_t(other.size) {
-            *this = other;
-        }
+        vector_t & operator=(const vector_t &other) {
+            if (this == &other)
+                return *this;
+            size = other.size;
+            capacity = other.capacity;
 
-        vector_t(vector_t &&other) noexcept {
-            *this = std::move(other);
+            free(data);
+            data = static_cast<T *>(malloc(sizeof(T) * capacity));
+            for (int i = 0; i < capacity; ++i) place(i, T(*(other.data + i)));
+
+            return *this;
         }
 
         ~vector_t() {
@@ -94,20 +119,20 @@ namespace vm::utils {
             return out;
         }
 
+        T *begin() {
+            return data;
+        }
+
+        T *end() {
+            return data + size;
+        }
+
         vector_t &resize(size_t new_capacity) {
             if (new_capacity == 0)
                 new_capacity = 1;
             capacity = new_capacity;
-            data = static_cast<T *>(realloc(data, capacity));
+            data = static_cast<T *>(realloc(data, sizeof(T) * capacity));
             return *this;
-        }
-
-        slice_t<T> operator[](const addr_t from, const addr_t to) {
-            return slice_t<T>(this, from, to);
-        }
-
-        T &operator[](const addr_t ind) {
-            return *(data + ind);
         }
 
         vector_t &trim() {
@@ -115,23 +140,9 @@ namespace vm::utils {
             return *this;
         }
 
-        vector_t &emplace(T &&t) {
-            shrink_if_needed(size + 1, block_size);
-            new(static_cast<void *>(data + size++)) T(std::move(t));
-            return *this;
-        }
-
         vector_t &push(const T &t) {
             shrink_if_needed(size + 1, block_size);
             new(static_cast<void *>(data + size++)) T(t);
-            return *this;
-        }
-
-        vector_t &emplace(addr_t ind, T &&t) {
-            shrink_if_needed(size + 1, block_size);
-            if (size - ind > 0)
-                memmove(data + ind + 1, data + ind, size++ - ind);
-            new(static_cast<void *>(data + ind)) T(std::move(t));
             return *this;
         }
 
@@ -143,6 +154,27 @@ namespace vm::utils {
             return *this;
         }
 
+        vector_t &push(slice_t<T> slice) {
+            shrink_if_needed(size + slice.size, block_size);
+            for (addr_t i = 0; i < slice.size; i++)
+                new(static_cast<void *>(data + size++)) T(*slice[i]);
+            return *this;
+        }
+
+        vector_t &emplace(T &&t) {
+            shrink_if_needed(size + 1, block_size);
+            new(static_cast<void *>(data + size++)) T(std::move(t));
+            return *this;
+        }
+
+        vector_t &emplace(addr_t ind, T &&t) {
+            shrink_if_needed(size + 1, block_size);
+            if (size - ind > 0)
+                memmove(data + ind + 1, data + ind, size++ - ind);
+            new(static_cast<void *>(data + ind)) T(std::move(t));
+            return *this;
+        }
+
         vector_t &emplace(slice_t<T> slice) {
             shrink_if_needed(size + slice.size, block_size);
             for (addr_t i = 0; i < slice.size; i++)
@@ -150,10 +182,8 @@ namespace vm::utils {
             return *this;
         }
 
-        vector_t &push(slice_t<T> slice) {
-            shrink_if_needed(size + slice.size, block_size);
-            for (addr_t i = 0; i < slice.size; i++)
-                new(static_cast<void *>(data + size++)) T(*slice[i]);
+        vector_t &place(addr_t ind, T &&t) {
+            new(static_cast<void *>(data + ind)) T(std::move(t));
             return *this;
         }
 
@@ -251,7 +281,8 @@ namespace vm::utils {
 
         ~stream_t() {
             if constexpr (COD)
-                fclose(stream);
+                if (stream != nullptr)
+                    fclose(stream);
         }
 
         size_t read(T *data, const size_t n) {

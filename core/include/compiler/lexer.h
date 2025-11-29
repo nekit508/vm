@@ -12,6 +12,8 @@ namespace compiler {
     inline auto ident_start = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_$";
     inline auto ident_body = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_$0123456789";
 
+    inline auto number = "0123456789";
+
     struct eof_e {};
 
     enum token_kind_t {
@@ -20,6 +22,12 @@ namespace compiler {
         ident, num, string, boolean,
 
         fun,
+
+        l_brace, r_brace,
+        l_paren, r_paren,
+        l_bracket, r_bracket,
+
+        dot, comma, semicolon, colon,
 
         eof
     };
@@ -38,12 +46,16 @@ namespace compiler {
               literal(std::move(literal)) {
         }
 
-        token_t(const token_t &other) {
-            *this = other;
+        token_t(const token_t &other)
+            : pos(other.pos),
+              kind(other.kind),
+              literal(other.literal) {
         }
 
-        token_t(token_t &&other) noexcept {
-            *this = std::move(other);
+        token_t(token_t &&other) noexcept
+            : pos(other.pos),
+              kind(other.kind),
+              literal(std::move(other.literal)) {
         }
 
         token_t & operator=(const token_t &other) {
@@ -79,18 +91,30 @@ namespace compiler {
 
         char read_one() {
             char out;
-            if (stream.read(&out, 1) == EOF) throw eof_e();
+            if (!stream.read(&out, 1)) throw eof_e();
             return out;
         }
 
-        void skip_all(const char *to_skip) {
-            for (bool not_skipped = true; not_skipped;) {
+        void skip_until(const char *list) {
+            for (bool exit = false; !exit;) {
                 char c = read_one();
-
-                not_skipped = false;
-                for (const char *p = to_skip; *p; p++)
+                for (const char *p = list; *p; p++)
                     if (c == *p) {
-                        not_skipped = false;
+                        exit = true;
+                        break;
+                    }
+            }
+
+            stream << 1;
+        }
+
+        void skip_while(const char *list) {
+            for (bool exit = false; !exit;) {
+                char c = read_one();
+                exit = true;
+                for (const char *p = list; *p; p++)
+                    if (c == *p) {
+                        exit = false;
                         break;
                     }
             }
@@ -136,12 +160,19 @@ namespace compiler {
         }
 
         void skip_white_spaces() {
-            skip_all(white_space);
+            skip_while(white_space);
         }
 
-        token_t read_ident_or_keyword() {
+        token_t parse_ident_or_keyword() {
             token_kind_t kind = fun;
             str_t literal(std::move(read_while(ident_body)));
+            literal.trim();
+            return token_t{stream.pos(), kind, std::move(literal)};
+        }
+
+        token_t parse_number() {
+            token_kind_t kind = num;
+            str_t literal(std::move(read_while(number)));
             literal.trim();
             return token_t{stream.pos(), kind, std::move(literal)};
         }
@@ -153,14 +184,62 @@ namespace compiler {
                 for (;;) {
                     skip_white_spaces();
                     char c = read_one();
-                    stream << 1;
 
                     if (in(c, ident_start)) {
-                        out.emplace(std::move(read_ident_or_keyword()));
-                    }
+                        stream << 1;
+                        out.emplace(std::move(parse_ident_or_keyword()));
+                    } else if (in(c, number)) {
+                        stream << 1;
+                        out.emplace(std::move(parse_number()));
+                    } else {
+                        // try to parse one-symbol token
+                        const addr_t pos = stream.pos();
+                        str_t literal(1);
+                        literal.emplace(std::move(c));
+                        bool processed = true;
+                        switch (c) {
+                            case '{':
+                                out.emplace(token_t(pos, l_brace, std::move(literal)));
+                                break;
+                            case '}':
+                                out.emplace(token_t(pos, r_brace, std::move(literal)));
+                                break;
+                            case '(':
+                                out.emplace(token_t(pos, l_paren, std::move(literal)));
+                                break;
+                            case ')':
+                                out.emplace(token_t(pos, r_paren, std::move(literal)));
+                                break;
+                            case '[':
+                                out.emplace(token_t(pos, l_bracket, std::move(literal)));
+                                break;
+                            case ']':
+                                out.emplace(token_t(pos, r_bracket, std::move(literal)));
+                                break;
+                            case '.':
+                                out.emplace(token_t(pos, dot, std::move(literal)));
+                                break;
+                            case ',':
+                                out.emplace(token_t(pos, comma, std::move(literal)));
+                                break;
+                            case ';':
+                                out.emplace(token_t(pos, semicolon, std::move(literal)));
+                                break;
+                            case ':':
+                                out.emplace(token_t(pos, colon, std::move(literal)));
+                                break;
+                            default:
+                                processed = false;
+                                break;
+                        }
 
+                        // we haven't parsed it
+                        if (!processed) {
+
+                        }
+                    }
                 }
-            } catch (const eof_e &e) {
+            } catch (const eof_e &) {
                 out.emplace(token_t(stream.pos(), eof, str_t(0)));
             }
 
