@@ -1,7 +1,5 @@
 #pragma once
 
-#include <vector>
-
 #include "memory.h"
 
 namespace vm {
@@ -33,7 +31,7 @@ namespace vm {
         utils::memory_t<> ro_data;
 
         sym_table_t sym_table;
-        std::vector<frame_prototype_t> frame_prototypes;
-        std::vector<thread_t> threads;
+        utils::vector_t<frame_prototype_t> frame_prototypes;
+        utils::vector_t<thread_t> threads;
     };
 }

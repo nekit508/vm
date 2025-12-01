@@ -1,6 +1,5 @@
-fun main(): int {
+fun main(int val) {
     asm {
         nop
     }
-    return 0;
 }

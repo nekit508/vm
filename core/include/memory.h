@@ -5,8 +5,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
+#include <new>
 
 #include "vm_types.h"
+
+#define VECTOR_T_DEFAULT_BLOCK_SIZE 64
+
+#define delete_value(value, T) {if constexpr (__is_pointer(T)) delete *value; else value->~T();}
 
 #define debug_memory true
 #define if_debug_memory(code) \
@@ -14,10 +20,101 @@
         code \
     }
 #define memory_error(message) {fputs(message, stderr);fputs("\n", stderr);raise(SIGSEGV);}
+#define tv(p) static_cast<void *>(p)
 
 namespace vm::utils {
-    template<typename T, size_t block_size = 64>
+    /** V and E must be different types. */
+    template<typename V, typename E>
+    struct res_t {
+        /*void *data;*/
+        char data[sizeof(V) > sizeof(E) ? sizeof(V) : sizeof(E)];
+        bool hv, owns = true;
+
+        res_t(res_t &other) : hv(other.hv), owns(other.owns) {
+            if (hv) new(tv(data)) V(other.value());
+            else new(tv(data)) E(other.error());
+        }
+
+        res_t(res_t &&other) noexcept : hv(other.hv), owns(other.owns) {
+            if (hv) new(tv(data)) V(std::move(other.value()));
+            else new(tv(data)) E(std::move(other.error()));
+
+            other.owns = false;
+        }
+
+        res_t &disown() {
+            owns = false;
+            return *this;
+        }
+
+        res_t &own() {
+            owns = true;
+            return *this;
+        }
+
+        res_t &operator=(res_t &other) {
+            this->~res_t();
+            hv = other.hv;
+            owns = other.owns;
+            if (hv)new(tv(data)) V(other.value());
+            else new(tv(data)) E(other.error());
+            return *this;
+        }
+
+        res_t &operator=(res_t &&other) noexcept {
+            this->~res_t();
+            data = other.data;
+            hv = other.hv;
+
+            owns = other.owns;
+            if (hv) new(tv(data)) V(std::move(other.value()));
+            else new(tv(data)) E(std::move(other.error()));
+            other.owns = false;
+
+            return *this;
+        }
+
+        res_t(V &&v) : hv(true) {
+            new(tv(data)) V(std::move(v));
+        }
+
+        res_t(const V &v) : hv(true) {
+            new(tv(data)) V(v);
+        }
+
+        res_t(E &&e) : hv(false) {
+            new(tv(data)) E(std::move(e));
+        }
+
+        res_t(const E &e) : hv(false) {
+            new(tv(data)) E(e);
+        }
+
+        V &value() {
+            return *reinterpret_cast<V *>(data);
+        }
+
+        E &error() {
+            return *reinterpret_cast<E *>(data);
+        }
+
+        operator bool() const {
+            return hv;
+        }
+
+        ~res_t() {
+            if (owns) {
+                if (hv)
+                    delete_value(reinterpret_cast<V *>(data), V)
+                else
+                    delete_value(reinterpret_cast<E *>(data), E)
+            }
+        }
+    };
+
+    template<typename T, size_t block_size = VECTOR_T_DEFAULT_BLOCK_SIZE>
     struct vector_t;
+    typedef vector_t<char> str_t;
 
     /** Slices shouldn't own memory. [start;end) */
     template<typename T>
@@ -39,14 +136,32 @@ namespace vm::utils {
     };
 
     /** There are three type of insert functions:
-     * - emplace - creates new object in new cell at index and calls a move constructor
-     * - push - creates new object in new cell at index and calls a copy constructor
-     * - place - creates new object in old cell and calls a move constructor
+     * - emplace - creates new object in new cell with a move constructor
+     * - push - creates new object in new cell with a copy constructor
+     * - place - creates new object in old cell with a move constructor
      */
     template<typename T, size_t block_size>
     struct vector_t {
         size_t size = 0, capacity;
         T *data;
+
+        /** Whether data be erased and freed. */
+        bool del = true;
+
+        ~vector_t() {
+            if (del && data != nullptr) {
+                erase(operator[](0, size));
+                free(data);
+                data = nullptr;
+            }
+        }
+
+        vector_t copy() {
+            return vector_t(*this);
+        }
+
+        vector_t(T *data, const size_t len, const bool del = false) : size(len), capacity(len), data(data), del(del) {
+        }
 
         explicit vector_t(const size_t capacity) : capacity(capacity),
                                                    data(nullptr) {
@@ -56,58 +171,67 @@ namespace vm::utils {
         vector_t() : vector_t(block_size) {
         }
 
-        slice_t<T> operator[](const addr_t from, const addr_t to) {
+        slice_t<T> operator[](const addr_t from, const addr_t to, bool back = false) {
+            if (back)
+                return slice_t<T>(this, from, size - to + 1);
             return slice_t<T>(this, from, to);
         }
 
-        T &operator[](const addr_t ind) {
-            return *(data + ind);
+        T *operator[](const addr_t ind) const {
+            return data + ind;
         }
 
         vector_t(const vector_t &other)
             : size(other.size),
               capacity(other.size),
-              data(static_cast<T *>(malloc(sizeof(T) * capacity))) {
+              data(static_cast<T *>(malloc(sizeof(T) * capacity))),
+              del(other.del) {
             for (int i = 0; i < other.size; ++i) place(i, T(*(other.data + i)));
         }
 
         vector_t(vector_t &&other) noexcept
             : size(other.size),
               capacity(other.size),
-              data(other.data) {
+              data(other.data),
+              del(other.del) {
             other.data = nullptr;
         }
 
-        vector_t & operator=(vector_t &&other) noexcept {
-            if (this == &other)
-                return *this;
+        vector_t &operator=(vector_t &&other) noexcept {
+            if (this == &other) return *this;
+
+            del = other.del;
             size = other.size;
             capacity = other.size;
 
-            free(data);
+            this->~vector_t();
             data = other.data;
             other.data = nullptr;
             return *this;
         }
 
-        vector_t & operator=(const vector_t &other) {
-            if (this == &other)
-                return *this;
+        vector_t &operator=(const vector_t &other) {
+            if (this == &other) return *this;
+
+            del = other.del;
             size = other.size;
             capacity = other.capacity;
 
-            free(data);
+            this->~vector_t();
             data = static_cast<T *>(malloc(sizeof(T) * capacity));
             for (int i = 0; i < capacity; ++i) place(i, T(*(other.data + i)));
 
             return *this;
         }
 
-        ~vector_t() {
-            if (data != nullptr) {
-                erase(this->operator[](0, size));
-                free(data);
-            }
+        vector_t &dont_del() {
+            del = false;
+            return *this;
+        }
+
+        vector_t &do_del() {
+            del = true;
+            return *this;
         }
 
         /** Deattaches array. */
@@ -195,7 +319,7 @@ namespace vm::utils {
 
         vector_t &erase(addr_t ind) {
             T *p = data + ind;
-            p->~T();
+            delete_value(p, T)
             if (const size_t m = size-- - ind; m > 0)
                 memmove(p, p + 1, m);
             return *this;
@@ -203,24 +327,28 @@ namespace vm::utils {
 
         vector_t &erase(slice_t<T> slice) {
             for (addr_t i = 0; i < slice.size; i++)
-                slice[i]->~T();
+                delete_value(slice[i], T)
             if (const size_t m = size - slice.end; m > 0)
                 memmove(slice[0], slice[slice.size - 1] + 1, m);
             size -= slice.size;
             return *this;
         }
 
-        bool operator==(const vector_t &other) const {
+        bool operator==(const vector_t<T> &other) const {
             if (other.size != size)
                 return false;
 
             for (addr_t i = 0; i < size; ++i)
-                if (operator[](i) != other[i])
+                if (*operator[](i) != *other[i])
                     return false;
 
             return true;
         }
     };
+
+    str_t cstr2str_t(const char *str);
+
+    str_t cstr2strm_t(const char *str);
 
     template<typename T>
     T *slice_t<T>::operator[](const addr_t index) {
@@ -296,9 +424,34 @@ namespace vm::utils {
         }
     };
 
-    /** Wraps data and provides access to it as input buffer, stack or output buffer. */
+    /** Wraps raw bytes data and provides access to it as input buffer, stack or output buffer. */
     template<bool ro = false>
     struct memory_t {
+        memory_t &read(const r_addr_t offset) {
+            read_pos += offset;
+            return *this;
+        }
+
+        memory_t &write(const r_addr_t offset) {
+            write_pos += offset;
+            return *this;
+        }
+
+        memory_t &stack(const r_addr_t offset) {
+            stack_pos += offset;
+            return *this;
+        }
+
+        template<typename T>
+        T *read() {
+            return reinterpret_cast<T *>(data + read_pos);
+        }
+
+        template<typename T>
+        T *stack() {
+            return reinterpret_cast<T *>(data + stack_pos - sizeof(T));
+        }
+
         addr_t get_read_pos() const {
             return read_pos;
         }
@@ -323,36 +476,63 @@ namespace vm::utils {
             this->stack_pos = stack_pos;
         }
 
-        char *data = nullptr;
-
         size_t size = 0;
+        char *data = nullptr;
         addr_t read_pos = 0, write_pos = 0, stack_pos = 0;
 
-        explicit memory_t(const size_t size) : data(static_cast<char *>(malloc(size))), size(size) {
+        template<typename T>
+        memory_t(T *data, const size_t size) : size(size), data(reinterpret_cast<char *>(data)) {
         }
 
-        explicit memory_t(const memory_t &other) : size(other.size) {
-            if constexpr (ro)
-                data = other.data;
-            else {
-                data = static_cast<char *>(malloc(size));
-                memcpy(data, other.data, size);
-            }
+        explicit memory_t(const size_t size) : size(size), data(static_cast<char *>(malloc(this->size))) {
         }
 
-        memory_t(memory_t &&other) noexcept {
-            *this = std::move(other);
+        memory_t(const memory_t &other)
+            : size(other.size),
+              data(static_cast<char *>(malloc(size))),
+              read_pos(other.read_pos),
+              write_pos(other.write_pos),
+              stack_pos(other.stack_pos) {
+            memcpy(data, other.data, size);
         }
 
-        memory_t &operator=(memory_t &&other) noexcept {
+        memory_t(memory_t &&other) noexcept
+            : size(other.size),
+              data(other.data),
+              read_pos(other.read_pos),
+              write_pos(other.write_pos),
+              stack_pos(other.stack_pos) {
+            other.data = nullptr;
+        }
+
+        memory_t &operator=(const memory_t &other) {
+            if (this == &other)
+                return *this;
             size = other.size;
-            data = other.data;
-
             read_pos = other.read_pos;
             write_pos = other.write_pos;
             stack_pos = other.stack_pos;
 
+            this->~memory_t();
+            data = other.data;
+            memcpy(data, other.data, size);
+
+            return *this;
+        }
+
+        memory_t &operator=(memory_t &&other) noexcept {
+            if (this == &other)
+                return *this;
+
+            size = other.size;
+            read_pos = other.read_pos;
+            write_pos = other.write_pos;
+            stack_pos = other.stack_pos;
+
+            this->~memory_t();
+            data = other.data;
             other.data = nullptr;
+
             return *this;
         }
 

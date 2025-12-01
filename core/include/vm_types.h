@@ -2,11 +2,12 @@
 #include <cstdint>
 
 typedef uint64_t addr_t;
+typedef int64_t r_addr_t;
 
-inline constexpr size_t word_size (sizeof(void*));
+inline constexpr size_t word_size(sizeof(void *));
 
 struct frame_meta {
-    char* name;
+    char *name;
     size_t local_variables_size;
     addr_t code_start;
     addr_t code_end;
