@@ -1,6 +1,6 @@
 #pragma once
 
-#include "memory.h"
+#include "utils.h"
 
 namespace lexer {
     inline auto white_space = "\t\n\r ";
