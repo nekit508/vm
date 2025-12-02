@@ -1,6 +1,6 @@
 #pragma once
 
-#include "memory.h"
+#include "utils.h"
 
 namespace vm {
     struct environment_t {

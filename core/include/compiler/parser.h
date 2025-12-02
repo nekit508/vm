@@ -1,8 +1,9 @@
 #pragma once
 #include <algorithm>
+#include <string>
 
 #include "lexer.h"
-#include "memory.h"
+#include "utils.h"
 
 #define immutable(type) \
     type(type &&other) = delete; \
@@ -23,6 +24,34 @@ namespace parser {
         enum ast_kind_t {
             frame,
             parameter
+        };
+
+        struct ast_asm_part_t {
+            immutable(ast_asm_part_t)
+
+            vm::utils::str_t literal;
+
+            explicit ast_asm_part_t(vm::utils::str_t &&literal) : literal(std::move(literal)) {
+            }
+        };
+
+        struct ast_asm_instruction_t {
+            immutable(ast_asm_instruction_t)
+
+            vm::utils::vector_t<ast_asm_part_t *> parts;
+
+            explicit ast_asm_instruction_t(vm::utils::vector_t<ast_asm_part_t *> &&parts) : parts(std::move(parts)) {
+            }
+        };
+
+        struct ast_asm_block_t {
+            immutable(ast_asm_block_t)
+
+            vm::utils::vector_t<ast_asm_block_t *> instructions;
+
+            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_block_t *> &&instructions) : instructions(
+                std::move(instructions)) {
+            }
         };
 
         struct ast_parameter_t {
@@ -90,7 +119,9 @@ namespace parser {
         vm::utils::res_t<lexer::token_t *, parse_error_e> accept(const lexer::token_kind_t target) {
             if (*next() == target)
                 return get();
-            return parse_error_e(pos(), std::move(vm::utils::cstr2strm_t("Expected ").emplace(vm::utils::cstr2strm_t(lexer::to_string(target))[0, 1, true])));
+            return parse_error_e(pos(), std::move(
+                                     vm::utils::cstr2strm_t("Expected ").emplace(
+                                         vm::utils::cstr2strm_t(lexer::to_string(target))[0, 1, true])));
         }
 
         bool probe(const lexer::token_kind_t prober) {

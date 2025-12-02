@@ -1,11 +1,15 @@
-#include "memory.h"
+#include "utils.h"
 #include "compiler/lexer.h"
 #include "compiler/parser.h"
+
+#include "tests/tests.h"
 
 namespace lx = lexer;
 namespace pr = parser;
 
 int main(int argc, char **argv) {
+    tests::run();
+
     lx::context_t compiler_context;
     compiler_context.stream = fopen("code.f", "r");
 
