@@ -12,10 +12,10 @@ namespace vm::utils {
         char *data;
         size_t size;
 
-        explicit ram_file_t(FILE *fd) : fp(fd), fd(fileno(fp)) {
+        explicit ram_file_t(FILE *fd, const int opt) : fp(fd), fd(fileno(fp)) {
             fseek(fd, 0, SEEK_END);
             size = ftell(fd);
-            data = static_cast<char *>(mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, this->fd, 0));
+            data = static_cast<char *>(mmap(nullptr, size, opt, MAP_SHARED, this->fd, 0));
         }
 
         ram_file_t(const ram_file_t &other) = delete;
@@ -49,8 +49,13 @@ namespace vm::utils {
             }
         }
 
-        char *operator[](addr_t pos) {
+        char *operator[](const addr_t pos) {
             return data + pos;
+        }
+
+        static ram_file_t open(const char *file, int opt) {
+            const char *mode = opt & PROT_WRITE ? "r+" : "r";
+            return ram_file_t(fopen(file, mode), opt);
         }
     };
 }

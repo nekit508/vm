@@ -1,5 +1,4 @@
 #pragma once
-#include <assert.h>
 #include "utils/res_t.h"
 
 #include "tests_def.h"
@@ -17,18 +16,17 @@ namespace tests::res_t {
 
         struct error {
             ~error() {
-                ed = false;
+                ed = true;
             }
         };
 
-        vm::utils::res_t<value, error> res1(value{});
-        vm::utils::res_t<value, error> res2(value{});
+        {
+            auto res2 =  vm::utils::res_t<value, error>(error{});
+            auto res1 =  vm::utils::res_t<value, error>(value{});
+        }
 
-        res1.~res_t();
-        res2.~res_t();
-
-        TEST(|___|___|___test_stack_destructor value, vd);
-        TEST(|___|___|___test_stack_destructor error, ed);
+        TEST(|___|___|___test_stack_destructor value, vd)
+        TEST(|___|___|___test_stack_destructor error, ed)
     }
 
     inline void run() {

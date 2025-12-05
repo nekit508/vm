@@ -26,7 +26,7 @@ const char * lexer::to_string(token_kind_t e) {
     }
 }
 
-lexer::token_t::token_t(): pos(0), kind(null), literal(0) {
+lexer::token_t::token_t(): pos(0), kind(null), literal() {
 }
 
 lexer::token_t::token_t(const addr_t pos, const token_kind_t kind, vm::utils::str_t &&literal): pos(pos),
@@ -173,7 +173,7 @@ lexer::token_t lexer::context_t::parse_number() {
 }
 
 lexer::tokens_t lexer::context_t::parse() {
-    tokens_t out{};
+    tokens_t out;
 
     try {
         for (;;) {
@@ -189,7 +189,7 @@ lexer::tokens_t lexer::context_t::parse() {
             } else {
                 // try to parse one-symbol token
                 const addr_t pos = stream.pos();
-                vm::utils::str_t literal(1);
+                vm::utils::str_t literal;
                 literal.emplace(std::move(c));
                 bool processed = true;
                 switch (c) {
@@ -235,7 +235,7 @@ lexer::tokens_t lexer::context_t::parse() {
             }
         }
     } catch (const eof_e &) {
-        out.emplace(token_t(stream.pos(), eof, vm::utils::str_t(0)));
+        out.emplace(token_t(stream.pos(), eof, vm::utils::str_t()));
     }
 
     return out;

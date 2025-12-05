@@ -4,7 +4,7 @@
 
 namespace vm::utils {
     /** V and E must be different types. */
-    template<typename V, typename E>
+    template<typename V, typename E> requires (not __is_same(V, E))
     struct res_t {
         /*void *data;*/
         char data[sizeof(V) > sizeof(E) ? sizeof(V) : sizeof(E)];

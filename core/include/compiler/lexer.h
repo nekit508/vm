@@ -46,7 +46,7 @@ namespace lexer {
         keyword_t(vm::utils::cstr2str_t("asm"), asmm)
     };
 
-    inline vm::utils::vector_t keywords{keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t)};
+    inline vm::utils::vector_t<keyword_t> keywords(vm::utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false));
 
     const char *to_string(token_kind_t e);
 

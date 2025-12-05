@@ -1,5 +1,7 @@
 #pragma once
 #include <algorithm>
+#include <any>
+#include <iostream>
 #include <string>
 
 #include "lexer.h"
@@ -22,63 +24,119 @@ namespace parser {
 
     namespace ast {
         enum ast_kind_t {
-            frame,
-            parameter
+            asm_part, asm_instruction, asm_block, parameter, frame, root
         };
 
-        struct ast_asm_part_t {
+        struct ast_t {
+            ast_kind_t kind;
+
+            immutable(ast_t);
+
+            explicit ast_t(const ast_kind_t kind) : kind(kind) {
+            }
+
+            ~ast_t();
+
+            void operator delete(void *ptr, size_t size);
+        private:
+            bool deleted = false;
+        };
+
+        template<typename T> requires __is_base_of(ast_t, T)
+        constexpr T *cast(ast_t *ast) {
+            return reinterpret_cast<T *>(ast);
+        }
+
+        struct ast_asm_part_t : ast_t {
             immutable(ast_asm_part_t)
 
             vm::utils::str_t literal;
 
-            explicit ast_asm_part_t(vm::utils::str_t &&literal) : literal(std::move(literal)) {
+            explicit ast_asm_part_t(vm::utils::str_t &&literal) : ast_t(asm_part),
+                                                                  literal(std::move(literal)) {
             }
         };
 
-        struct ast_asm_instruction_t {
+        struct ast_asm_instruction_t : ast_t {
             immutable(ast_asm_instruction_t)
 
             vm::utils::vector_t<ast_asm_part_t *> parts;
 
-            explicit ast_asm_instruction_t(vm::utils::vector_t<ast_asm_part_t *> &&parts) : parts(std::move(parts)) {
+            explicit ast_asm_instruction_t(vm::utils::vector_t<ast_asm_part_t *> &&parts) : ast_t(asm_instruction),
+                parts(std::move(parts)) {
             }
         };
 
-        struct ast_asm_block_t {
+        struct ast_asm_block_t : ast_t {
             immutable(ast_asm_block_t)
 
             vm::utils::vector_t<ast_asm_block_t *> instructions;
 
-            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_block_t *> &&instructions) : instructions(
-                std::move(instructions)) {
+            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_block_t *> &&instructions) : ast_t(asm_block),
+                instructions(
+                    std::move(instructions)) {
             }
         };
 
-        struct ast_parameter_t {
+        struct ast_parameter_t : ast_t {
             immutable(ast_parameter_t)
 
-            ast_kind_t kind;
+
             vm::utils::vector_t<char> type;
             vm::utils::vector_t<char> name;
 
-            ast_parameter_t(const ast_kind_t kind, vm::utils::vector_t<char> &&type,
-                            vm::utils::vector_t<char> &&name) : kind(kind), type(std::move(type)),
+            ast_parameter_t(vm::utils::vector_t<char> &&type,
+                            vm::utils::vector_t<char> &&name) : ast_t(parameter), type(std::move(type)),
                                                                 name(std::move(name)) {
             }
         };
 
-        struct ast_frame_t {
+        struct ast_frame_t : ast_t {
             immutable(ast_frame_t)
 
-            ast_kind_t kind;
             vm::utils::str_t name;
             vm::utils::vector_t<ast_parameter_t *> parameters;
 
-            explicit ast_frame_t(const ast_kind_t kind, vm::utils::str_t &&name,
-                                 vm::utils::vector_t<ast_parameter_t *> &&parameters) : kind(kind),
-                name(std::move(name)), parameters(std::move(parameters)) {
+            explicit ast_frame_t(vm::utils::str_t &&name,
+                                 vm::utils::vector_t<ast_parameter_t *> &&parameters) : ast_t(frame),
+                name(std::move(name)),
+                parameters(std::move(parameters)) {
             }
         };
+
+        struct ast_root_t : ast_t {
+            immutable(ast_root_t)
+
+            vm::utils::vector_t<ast_t *> list;
+
+            explicit ast_root_t(vm::utils::vector_t<ast_t *> &&list) : ast_t(root), list(std::move(list)) {
+            }
+        };
+
+        inline ast_t::~ast_t() {
+            if (deleted)
+                return;
+            deleted = true;
+        }
+
+        inline void ast_t::operator delete(void *ptr, const size_t size) {
+            auto p = static_cast<ast_t *>(ptr);
+
+            if (p->kind == asm_part)
+                reinterpret_cast<ast_asm_part_t *>(p)->~ast_asm_part_t();
+            else if (p->kind == asm_instruction)
+                reinterpret_cast<ast_asm_instruction_t *>(p)->~ast_asm_instruction_t();
+            else if (p->kind == asm_block)
+                reinterpret_cast<ast_asm_block_t *>(p)->~ast_asm_block_t();
+            else if (p->kind == parameter)
+                reinterpret_cast<ast_parameter_t *>(p)->~ast_parameter_t();
+            else if (p->kind == frame)
+                reinterpret_cast<ast_frame_t *>(p)->~ast_frame_t();
+            else if (p->kind == root)
+                reinterpret_cast<ast_root_t *>(p)->~ast_root_t();
+
+            ::operator delete(ptr);
+        }
     }
 
     using namespace ast;
@@ -163,7 +221,7 @@ namespace parser {
             auto name = accept(lexer::ident).disown();
             if (!name) return name.error();
 
-            return new ast_parameter_t(parameter, type.value()->literal.copy(), name.value()->literal.copy());
+            return new ast_parameter_t(type.value()->literal.copy(), name.value()->literal.copy());
         }
 
         vm::utils::res_t<ast_frame_t *, parse_error_e> parse_frame() {
@@ -189,7 +247,18 @@ namespace parser {
                     return rpr.error();
             }
 
-            return new ast_frame_t(frame, name.value()->literal.copy(), std::move(params));
+            return new ast_frame_t(name.value()->literal.copy(), std::move(params));
+        }
+
+        vm::utils::res_t<ast_root_t *, parse_error_e> parse() {
+            auto out = vm::utils::vector_t<ast_t *>();
+
+            auto res = parse_frame().disown();
+            if (!res)
+                return res.error();
+            out.emplace(res.value());
+
+            return new ast_root_t(std::move(out));
         }
     };
 }
