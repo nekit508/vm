@@ -10,16 +10,22 @@ namespace vm::utils {
         char data[sizeof(V) > sizeof(E) ? sizeof(V) : sizeof(E)];
         bool hv, owns = true;
 
-        res_t(res_t &other) : hv(other.hv), owns(other.owns) {
-            if (hv) new(tv(data)) V(other.value());
-            else new(tv(data)) E(other.error());
-        }
-
-        res_t(res_t &&other) noexcept : hv(other.hv), owns(other.owns) {
+        template<typename OV, typename OE> requires (not __is_same(OV, OE) && __is_convertible(OV, V) && __is_convertible(OE, E))
+        res_t(res_t<OV, OE> &&other) noexcept : hv((other.hv)), owns(other.owns) {
             if (hv) new(tv(data)) V(std::move(other.value()));
             else new(tv(data)) E(std::move(other.error()));
 
             other.owns = false;
+        }
+
+        res_t &&disown_m() {
+            owns = false;
+            return std::move(*this);
+        }
+
+        res_t &&sown_m() {
+            owns = true;
+            return std::move(*this);
         }
 
         res_t &disown() {
@@ -76,6 +82,14 @@ namespace vm::utils {
 
         E &error() {
             return *reinterpret_cast<E *>(data);
+        }
+
+        V &&value_m() {
+            return std::move(*reinterpret_cast<V *>(data));
+        }
+
+        E &&error_m() {
+            return std::move(*reinterpret_cast<E *>(data));
         }
 
         operator bool() const {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <algorithm>
+#include "bits/move.h"
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>

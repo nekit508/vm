@@ -1,100 +1,12 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
+#include "allocators.h"
 #include "defs.h"
 
 namespace vm::utils {
-    constexpr size_t heap_allocator_block_size(64);
-
-    template<size_t BS = heap_allocator_block_size> requires (BS != 0)
-    struct heap_allocator_t {
-        size_t capacity;
-        void *mem = nullptr;
-        bool del = true;
-
-        heap_allocator_t(void *data, const size_t size, const bool del = true) : capacity(size),
-            mem(static_cast<char *>(data)), del(del) {
-        }
-
-        heap_allocator_t() : capacity(0) {
-        }
-
-        heap_allocator_t(const heap_allocator_t &other)
-            : capacity(other.capacity) {
-            alloc(capacity, true);
-        }
-
-        heap_allocator_t &operator=(const heap_allocator_t &other) {
-            if (this == &other)
-                return *this;
-            this->~heap_allocator_t();
-            capacity = other.capacity;
-            del = true;
-            alloc(capacity, true);
-            return *this;
-        }
-
-        heap_allocator_t(heap_allocator_t &&other) noexcept
-            : capacity(other.capacity),
-              mem(other.mem),
-              del(other.del) {
-            other.mem = nullptr;
-        }
-
-        heap_allocator_t &operator=(heap_allocator_t &&other) noexcept {
-            if (this == &other)
-                return *this;
-            this->~heap_allocator_t();
-            mem = other.mem;
-            capacity = other.capacity;
-            del = other.del;
-            other.mem = nullptr;
-            return *this;
-        }
-
-        void alloc(const size_t size, const bool direct = false) {
-            if (direct) {
-                capacity = size;
-                mem = realloc(mem, capacity);
-            } else if (size > capacity) {
-                const size_t s = size / BS;
-                capacity = (size % BS ? s + 1 : s) * BS;
-                mem = realloc(mem, capacity);
-            }
-        }
-
-        void *data() const {
-            return mem;
-        }
-
-        void move(void *dest, void *src, const size_t num) {
-            memmove(dest, src, num);
-        }
-
-        ~heap_allocator_t() {
-            if (del && mem) {
-                free(mem);
-                mem = nullptr;
-            }
-        }
-    };
-
-    template<typename T>
-    concept allocator_c = requires(T o, const size_t s, void *vp, bool b)
-    {
-        { o.alloc(s) } -> std::same_as<void>;
-        { o.alloc(s, b) } -> std::same_as<void>;
-        { o.data() } -> std::same_as<void *>;
-        { o.move(vp, vp, s) } -> std::same_as<void>;
-    };
-
-    template<typename T, typename A = heap_allocator_t<> >
-        requires (allocator_c<A>)
-    struct vector_t;
-
-    typedef vector_t<char> str_t;
-
     /** Slices shouldn't own memory. [start;end) */
     template<typename T>
     struct slice_t {
@@ -126,7 +38,7 @@ namespace vm::utils {
      * - push - creates new object in new cell with a copy constructor
      * - place - creates new object in old cell with a move constructor
      */
-    template<typename T, typename A> requires (allocator_c<A>)
+    template<typename T, typename A = heap_allocator_t<> > requires allocator_c<A>
     struct vector_t {
         typedef T data_type;
         typedef A alloc_type;
@@ -147,15 +59,19 @@ namespace vm::utils {
             return vector_t(*this);
         }
 
-        vector_t() : allocator(alloc_type()) {
+        vector_t() : allocator() {
         }
 
-        vector_t(const alloc_type &alloc) : allocator(alloc),
-                                            size(alloc.capacity) {
+        vector_t(const alloc_type &alloc, const size_t size) : allocator(alloc), size(size) {
         }
 
-        vector_t(alloc_type &&alloc) : allocator(std::move(alloc)),
-                                       size(alloc.capacity) {
+        vector_t(alloc_type &&alloc, const size_t size) : allocator(std::move(alloc)), size(size) {
+        }
+
+        vector_t(const alloc_type &alloc) : vector_t(alloc, 0) {
+        }
+
+        vector_t(alloc_type &&alloc) : vector_t(std::move(alloc), 0) {
         }
 
         slice_t<data_type> operator[](const addr_t from, const addr_t to, bool back = false) {
@@ -168,10 +84,18 @@ namespace vm::utils {
             return data() + ind;
         }
 
+        slice_t<data_type> as_slice() {
+            return slice_t(data(), 0, size);
+        }
+
+        operator slice_t<data_type>() {
+            return as_slice();
+        }
+
         vector_t(const vector_t &other)
             : allocator(other.allocator),
               size(other.size) {
-            for (int i = 0; i < other.size; ++i) place(i, T(*(other.data() + i)));
+            for (int i = 0; i < other.size; i++) place(i, T(*(other.data() + i)));
         }
 
         vector_t &operator=(const vector_t &other) {
@@ -181,7 +105,7 @@ namespace vm::utils {
 
             allocator = other.allocator;
             size = other.size;
-            for (int i = 0; i < size; ++i) place(i, T(*(other.data() + i)));
+            for (int i = 0; i < size; i++) place(i, T(*(other.data() + i)));
 
             return *this;
         }
@@ -305,16 +229,26 @@ namespace vm::utils {
         }
     };
 
-    constexpr str_t::alloc_type heap_allocator_from_str(const char *str) {
-        const size_t len = strlen(str);
-        return str_t::alloc_type(const_cast<char *>(str), len, false);
-    }
+    typedef vector_t<char> str_t;
 
-    inline str_t cstr2str_t(const char *str) {
-        return str_t(heap_allocator_from_str(str));
-    }
+    template<typename T> concept is_trivially_to_string = requires(T o)
+    {
+        { std::to_string(o) } -> std::same_as<std::string>;
+    };
 
-    inline str_t cstr2strm_t(const char *str) {
-        return str_t(heap_allocator_from_str(str)).copy();
+    template<typename T, std::string (*parser)(T) = nullptr> requires
+        (std::is_same_v<T, char *> || std::is_same_v<T, const char *> || is_trivially_to_string<T> || parser != nullptr)
+    constexpr str_t cstr2str(T value) {
+        if constexpr (std::is_same_v<T, char *> || std::is_same_v<T, const char *>)
+            return str_t().push(slice_t(const_cast<char *>(value), 0, strlen(value)));
+        else {
+            std::string s;
+            if constexpr (parser == nullptr)
+                s = std::to_string(value);
+            else
+                s = parser(value);
+            char *str = const_cast<char *>(s.c_str());
+            return str_t().push(slice_t(str, 0, strlen(str)));
+        }
     }
 }

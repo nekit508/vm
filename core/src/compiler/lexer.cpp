@@ -26,7 +26,7 @@ const char * lexer::to_string(token_kind_t e) {
     }
 }
 
-lexer::token_t::token_t(): pos(0), kind(null), literal() {
+lexer::token_t::token_t(): pos(0), kind(null) {
 }
 
 lexer::token_t::token_t(const addr_t pos, const token_kind_t kind, vm::utils::str_t &&literal): pos(pos),

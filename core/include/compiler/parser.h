@@ -1,8 +1,6 @@
 #pragma once
-#include <algorithm>
-#include <any>
+#include "bits/move.h"
 #include <iostream>
-#include <string>
 
 #include "lexer.h"
 #include "utils.h"
@@ -18,7 +16,14 @@ namespace parser {
         addr_t pos;
         vm::utils::str_t message;
 
+        parse_error_e(const parse_error_e &other) : pos(other.pos), message(other.message) {
+        }
+
+        parse_error_e(parse_error_e &&other) noexcept : pos(other.pos), message(std::move(other.message)) {
+        }
+
         explicit parse_error_e(const addr_t pos, vm::utils::str_t &&message) : pos(pos), message(std::move(message)) {
+            0;
         }
     };
 
@@ -38,6 +43,7 @@ namespace parser {
             ~ast_t();
 
             void operator delete(void *ptr, size_t size);
+
         private:
             bool deleted = false;
         };
@@ -70,11 +76,10 @@ namespace parser {
         struct ast_asm_block_t : ast_t {
             immutable(ast_asm_block_t)
 
-            vm::utils::vector_t<ast_asm_block_t *> instructions;
+            vm::utils::vector_t<ast_asm_instruction_t *> instructions;
 
-            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_block_t *> &&instructions) : ast_t(asm_block),
-                instructions(
-                    std::move(instructions)) {
+            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_instruction_t *> &&instructions) : ast_t(asm_block),
+                instructions(std::move(instructions)) {
             }
         };
 
@@ -96,11 +101,14 @@ namespace parser {
 
             vm::utils::str_t name;
             vm::utils::vector_t<ast_parameter_t *> parameters;
+            vm::utils::vector_t<ast_t *> statements;
 
             explicit ast_frame_t(vm::utils::str_t &&name,
-                                 vm::utils::vector_t<ast_parameter_t *> &&parameters) : ast_t(frame),
-                name(std::move(name)),
-                parameters(std::move(parameters)) {
+                                 vm::utils::vector_t<ast_parameter_t *> &&parameters,
+                                 vm::utils::vector_t<ast_t *> &&statements) : ast_t(frame),
+                                                                              name(std::move(name)),
+                                                                              parameters(std::move(parameters)),
+                                                                              statements(std::move(statements)) {
             }
         };
 
@@ -177,9 +185,15 @@ namespace parser {
         vm::utils::res_t<lexer::token_t *, parse_error_e> accept(const lexer::token_kind_t target) {
             if (*next() == target)
                 return get();
-            return parse_error_e(pos(), std::move(
-                                     vm::utils::cstr2strm_t("Expected ").emplace(
-                                         vm::utils::cstr2strm_t(lexer::to_string(target))[0, 1, true])));
+            return parse_error_e(pos(), std::move(vm::utils::str_t()
+                                     .push(vm::utils::cstr2str("Expected "))
+                                     .push(vm::utils::cstr2str(lexer::to_string(target)))
+                                     .push(vm::utils::cstr2str(" at "))
+                                     .push(vm::utils::cstr2str(pos()))
+                                     .push(vm::utils::cstr2str(" but "))
+                                     .push(vm::utils::cstr2str(lexer::to_string(get()->kind)))
+                                     .push(vm::utils::cstr2str(" provided."))
+                                     .trim()));
         }
 
         bool probe(const lexer::token_kind_t prober) {
@@ -214,48 +228,88 @@ namespace parser {
             return out;
         }
 
-        vm::utils::res_t<ast_parameter_t *, parse_error_e> parse_parameter() {
-            auto type = accept(lexer::ident).disown();
-            if (!type) return type.error();
+        vm::utils::res_t<ast_asm_block_t *, parse_error_e> parse_asm_block() {
+            auto asmm = accept(lexer::asmm).disown_m();
+            if (!asmm)
+                return asmm.error_m();
 
-            auto name = accept(lexer::ident).disown();
-            if (!name) return name.error();
+            auto lbr = accept(lexer::l_brace).disown_m();
+            if (!asmm)
+                return asmm.error_m();
+
+            while (probe_not_and_redo_if(lexer::r_brace, true)) {
+                next();
+            }
+
+            return new ast_asm_block_t(vm::utils::vector_t<ast_asm_instruction_t *>());
+        }
+
+        vm::utils::res_t<ast_t *, parse_error_e> parse_statement() {
+            if (probe_and_redo(lexer::asmm)) {
+                return parse_asm_block().disown_m();
+            }
+
+            return parse_error_e(pos(), std::move(vm::utils::str_t()
+                                     .push(vm::utils::cstr2str("Expected asm but "))
+                                     .push(vm::utils::cstr2str(lexer::to_string(get()->kind)))
+                                     .push(vm::utils::cstr2str(" provided."))));
+        }
+
+        vm::utils::res_t<ast_parameter_t *, parse_error_e> parse_parameter() {
+            auto type = std::move(accept(lexer::ident).disown());
+            if (!type) return type.error_m();
+
+            auto name = std::move(accept(lexer::ident).disown());
+            if (!name) return name.error_m();
 
             return new ast_parameter_t(type.value()->literal.copy(), name.value()->literal.copy());
         }
 
         vm::utils::res_t<ast_frame_t *, parse_error_e> parse_frame() {
-            if (auto fun = accept(lexer::fun).disown(); !fun)
-                return fun.error();
+            if (auto fun = std::move(accept(lexer::fun).disown()); !fun)
+                return fun.error_m();
 
-            auto name = accept(lexer::ident).disown();
+            auto name = std::move(accept(lexer::ident).disown());
             if (!name)
-                return name.error();
+                return name.own().error_m();
 
-            if (auto lpr = accept(lexer::l_paren).disown(); !lpr)
-                return lpr.error();
+            if (auto lpr = std::move(accept(lexer::l_paren).disown()); !lpr)
+                return lpr.error_m();
 
             vm::utils::vector_t<ast_parameter_t *> params;
             if (probe_not_and_redo_if(lexer::r_paren, true)) {
                 do {
-                    auto par = parse_parameter().disown();
+                    auto par = std::move(parse_parameter().disown());
                     if (!par)
-                        return par.error();
+                        return par.error_m();
                     params.push(par.value());
                 } while (probe_and_redo_if(lexer::comma, false));
-                if (auto rpr = accept(lexer::r_paren).disown(); !rpr)
-                    return rpr.error();
+                if (auto rpr = std::move(accept(lexer::r_paren).disown()); !rpr)
+                    return rpr.error_m();
             }
 
-            return new ast_frame_t(name.value()->literal.copy(), std::move(params));
+            auto lbr = accept(lexer::l_brace).disown_m();
+            if (!lbr)
+                return lbr.error_m();
+
+            vm::utils::vector_t<ast_t *> statements;
+            while (probe_not_and_redo_if(lexer::r_brace, true)) {
+                auto stmt = parse_statement().disown_m();
+                if (!stmt)
+                    return stmt.error_m();
+
+                statements.push(stmt.value());
+            }
+
+            return new ast_frame_t(name.value()->literal.copy(), std::move(params), std::move(statements));
         }
 
         vm::utils::res_t<ast_root_t *, parse_error_e> parse() {
             auto out = vm::utils::vector_t<ast_t *>();
 
-            auto res = parse_frame().disown();
+            auto res = parse_frame().disown_m();
             if (!res)
-                return res.error();
+                return res.error_m();
             out.emplace(res.value());
 
             return new ast_root_t(std::move(out));

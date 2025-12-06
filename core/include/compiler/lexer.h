@@ -37,16 +37,16 @@ namespace lexer {
     };
 
     inline keyword_t keywords_arr[] = {
-        keyword_t(vm::utils::cstr2str_t("fun"), fun),
+        keyword_t(vm::utils::cstr2str("fun"), fun),
 
-        keyword_t(vm::utils::cstr2str_t("false"), falsee),
-        keyword_t(vm::utils::cstr2str_t("true"), truee),
+        keyword_t(vm::utils::cstr2str("false"), falsee),
+        keyword_t(vm::utils::cstr2str("true"), truee),
 
-        keyword_t(vm::utils::cstr2str_t("if"), iff),
-        keyword_t(vm::utils::cstr2str_t("asm"), asmm)
+        keyword_t(vm::utils::cstr2str("if"), iff),
+        keyword_t(vm::utils::cstr2str("asm"), asmm)
     };
 
-    inline vm::utils::vector_t<keyword_t> keywords(vm::utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false));
+    inline vm::utils::vector_t<keyword_t> keywords(vm::utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false), sizeof(keywords_arr) / sizeof(keyword_t));
 
     const char *to_string(token_kind_t e);
 
