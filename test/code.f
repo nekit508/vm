@@ -1,5 +1,11 @@
 fun main(int val) {
     asm {
-        nop
+        dbg_brk;
+    }
+}
+
+fun ill() {
+    asm {
+        ill;
     }
 }

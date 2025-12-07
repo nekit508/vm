@@ -44,6 +44,16 @@ constexpr addr_t addr(T *ptr) {
 }
 
 template<typename T>
-    constexpr void* tv(T *ptr) {
+constexpr void* tv(T *ptr) {
     return  static_cast<void *>(ptr);
+}
+
+template<typename T>
+constexpr T rptr(char *ptr) {
+    return *reinterpret_cast<T *>(ptr);
+}
+template<typename T>
+constexpr T rptrs(char *ptr, T &d) {
+    d = *reinterpret_cast<T *>(ptr);
+    return sizeof(T);
 }

@@ -6,30 +6,46 @@
 #include "allocators.h"
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     /** Slices shouldn't own memory. [start;end) */
     template<typename T>
     struct slice_t {
         T *data;
 
-        addr_t start, end;
+        addr_t data_start, data_end;
         size_t size;
 
-        slice_t(T *data, const addr_t start, const addr_t end) : data(data), start(start), end(end) {
-            size = end - start;
+        slice_t(T *data, const addr_t start, const addr_t end) : data(data), data_start(start), data_end(end), size(end - start) {
+        }
+
+        slice_t(T *data, const size_t size) : slice_t(data, 0, size) {
         }
 
         slice_t(const slice_t &other) = default;
 
         slice_t(slice_t &&other) = delete;
 
+        T *begin() {
+           return data + data_start;
+        }
+
+        T *end() {
+           return data + data_end ;
+        }
+
         T *operator[](addr_t index) {
             if_debug_memory(
-                if (start + index >= end) {
+                if (data_start + index >= data_end) {
                 memory_error("index bounds out of slice")
                 }
             )
-            return data + start + index;
+            return data + data_start + index;
+        }
+
+        slice_t operator[](const addr_t from, const addr_t to, const bool back = false) {
+            if (back)
+                return slice_t(data, from, size - to + 1);
+            return slice_t(data, from, to);
         }
     };
 
@@ -38,7 +54,7 @@ namespace vm::utils {
      * - push - creates new object in new cell with a copy constructor
      * - place - creates new object in old cell with a move constructor
      */
-    template<typename T, typename A = heap_allocator_t<> > requires allocator_c<A>
+    template<typename T, typename A = heap_allocator_t<>> requires allocator_c<A>
     struct vector_t {
         typedef T data_type;
         typedef A alloc_type;
@@ -74,7 +90,7 @@ namespace vm::utils {
         vector_t(alloc_type &&alloc) : vector_t(std::move(alloc), 0) {
         }
 
-        slice_t<data_type> operator[](const addr_t from, const addr_t to, bool back = false) {
+        slice_t<data_type> operator[](const addr_t from, const addr_t to, const bool back = false) {
             if (back)
                 return slice_t<data_type>(data(), from, size - to + 1);
             return slice_t<data_type>(data(), from, to);
@@ -124,6 +140,10 @@ namespace vm::utils {
             size = other.size;
 
             return *this;
+        }
+
+        vector_t &&move() {
+            return std::move(*this);
         }
 
         data_type *begin() {
@@ -211,13 +231,24 @@ namespace vm::utils {
                     delete *slice[i];
                 else slice[i]->~data_type();
             }
-            if (const size_t m = size - slice.end; m > 0)
+            if (const size_t m = size - slice.data_end; m > 0)
                 memmove(slice[0], slice[slice.size - 1] + 1, m);
             size -= slice.size;
             return *this;
         }
 
         bool operator==(const vector_t<data_type> &other) const {
+            if (other.size != size)
+                return false;
+
+            for (addr_t i = 0; i < size; ++i)
+                if (*operator[](i) != *other[i])
+                    return false;
+
+            return true;
+        }
+
+        bool operator==(const slice_t<data_type> &other) const {
             if (other.size != size)
                 return false;
 
@@ -240,7 +271,7 @@ namespace vm::utils {
         (std::is_same_v<T, char *> || std::is_same_v<T, const char *> || is_trivially_to_string<T> || parser != nullptr)
     constexpr str_t cstr2str(T value) {
         if constexpr (std::is_same_v<T, char *> || std::is_same_v<T, const char *>)
-            return str_t().push(slice_t(const_cast<char *>(value), 0, strlen(value)));
+            return str_t().push(slice_t(const_cast<char *>(value), strlen(value)));
         else {
             std::string s;
             if constexpr (parser == nullptr)
@@ -250,5 +281,15 @@ namespace vm::utils {
             char *str = const_cast<char *>(s.c_str());
             return str_t().push(slice_t(str, 0, strlen(str)));
         }
+    }
+
+    template<typename A, typename V> requires allocator_c<A>
+    constexpr void write2vec(vector_t<char, A> *vec, V *val) {
+        vec->push(slice_t(reinterpret_cast<char *>(val), sizeof(V)));
+    }
+
+    template<typename A, typename V> requires allocator_c<A>
+    constexpr void write2vec(vector_t<char, A> *vec, V val) {
+        vec->push(slice_t(reinterpret_cast<char *>(&val), sizeof(V)));
     }
 }

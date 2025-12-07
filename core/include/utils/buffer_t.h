@@ -7,7 +7,7 @@
 
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     struct buffer_t {
         char *data;
         size_t size;

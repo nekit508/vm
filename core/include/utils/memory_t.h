@@ -2,7 +2,7 @@
 
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     /** Wraps raw bytes data and provides access to it as input buffer, stack or output buffer. */
     template<bool ro = false>
     struct memory_t {

@@ -5,7 +5,7 @@
 
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     /** Owns stream if COD is true. */
     template<typename T, bool COD = true>
     struct stream_t {

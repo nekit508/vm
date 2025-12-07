@@ -1,6 +1,8 @@
 #pragma once
 
-namespace vm::utils {
+#include "string.h"
+
+namespace utils {
     template<typename T>
     concept allocator_c = requires(T o, const size_t s, void *vp, bool b)
     {
@@ -10,9 +12,7 @@ namespace vm::utils {
         { o.move(vp, vp, s) } -> std::same_as<void>;
     };
 
-    constexpr size_t file_allocator_block_size(4096);
-
-    template<size_t BS = file_allocator_block_size> requires (BS != 0)
+    template<int access_type = PROT_READ | PROT_WRITE>
     struct file_allocator_t {
         FILE *fd = nullptr;
         void *mem = nullptr;
@@ -22,6 +22,7 @@ namespace vm::utils {
         }
 
         explicit file_allocator_t(FILE *fd) : fd(fd) {
+            alloc(0, true);
         }
 
         file_allocator_t(file_allocator_t &&other) noexcept
@@ -52,15 +53,16 @@ namespace vm::utils {
         file_allocator_t &operator=(const file_allocator_t &other) = delete;
 
         ~file_allocator_t() {
-            if (fd) fclose(fd);
             if (mem) munmap(mem, capacity);
+            if (fd) fclose(fd);
         }
 
         void alloc(const size_t size, const bool direct = false) {
-            if (mem) munmap(mem, capacity);
-
-            capacity = size % BS ? (size / BS + 1) * BS : size;
-            mem = mmap(nullptr, capacity, PROT_READ | PROT_WRITE, MAP_SHARED | MADV_RANDOM, fileno(fd), 0);
+            if (!mem) {
+                fseek(fd, 0, SEEK_END);
+                capacity = ftell(fd);
+                mem = mmap(nullptr, capacity, access_type, MAP_SHARED | MADV_RANDOM, fileno(fd), 0);
+            }
         }
 
         void *data() const {

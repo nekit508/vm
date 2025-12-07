@@ -21,8 +21,8 @@ namespace tests::res_t {
         };
 
         {
-            auto res2 =  vm::utils::res_t<value, error>(error{});
-            auto res1 =  vm::utils::res_t<value, error>(value{});
+            auto res2 =  utils::res_t<value, error>(error{});
+            auto res1 =  utils::res_t<value, error>(value{});
         }
 
         TEST(|___|___|___test_stack_destructor value, vd)

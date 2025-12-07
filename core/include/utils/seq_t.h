@@ -1,7 +1,7 @@
 #pragma once
 #include "bits/move.h"
 
-namespace vm::utils {
+namespace utils {
     template<typename T>
     struct seq_node_t {
         typedef T * rT;

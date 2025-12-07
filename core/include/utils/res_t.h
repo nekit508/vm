@@ -2,7 +2,7 @@
 
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     /** V and E must be different types. */
     template<typename V, typename E> requires (not __is_same(V, E))
     struct res_t {

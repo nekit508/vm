@@ -1,4 +1,6 @@
 #pragma once
+#include <algorithm>
+
 #include "bits/move.h"
 #include <iostream>
 
@@ -14,7 +16,7 @@
 namespace parser {
     struct parse_error_e {
         addr_t pos;
-        vm::utils::str_t message;
+        utils::str_t message;
 
         parse_error_e(const parse_error_e &other) : pos(other.pos), message(other.message) {
         }
@@ -22,7 +24,7 @@ namespace parser {
         parse_error_e(parse_error_e &&other) noexcept : pos(other.pos), message(std::move(other.message)) {
         }
 
-        explicit parse_error_e(const addr_t pos, vm::utils::str_t &&message) : pos(pos), message(std::move(message)) {
+        explicit parse_error_e(const addr_t pos, utils::str_t &&message) : pos(pos), message(std::move(message)) {
             0;
         }
     };
@@ -56,9 +58,9 @@ namespace parser {
         struct ast_asm_part_t : ast_t {
             immutable(ast_asm_part_t)
 
-            vm::utils::str_t literal;
+            utils::str_t literal;
 
-            explicit ast_asm_part_t(vm::utils::str_t &&literal) : ast_t(asm_part),
+            explicit ast_asm_part_t(utils::str_t &&literal) : ast_t(asm_part),
                                                                   literal(std::move(literal)) {
             }
         };
@@ -66,9 +68,9 @@ namespace parser {
         struct ast_asm_instruction_t : ast_t {
             immutable(ast_asm_instruction_t)
 
-            vm::utils::vector_t<ast_asm_part_t *> parts;
+            utils::vector_t<ast_asm_part_t *> parts;
 
-            explicit ast_asm_instruction_t(vm::utils::vector_t<ast_asm_part_t *> &&parts) : ast_t(asm_instruction),
+            explicit ast_asm_instruction_t(utils::vector_t<ast_asm_part_t *> &&parts) : ast_t(asm_instruction),
                 parts(std::move(parts)) {
             }
         };
@@ -76,9 +78,9 @@ namespace parser {
         struct ast_asm_block_t : ast_t {
             immutable(ast_asm_block_t)
 
-            vm::utils::vector_t<ast_asm_instruction_t *> instructions;
+            utils::vector_t<ast_asm_instruction_t *> instructions;
 
-            explicit ast_asm_block_t(vm::utils::vector_t<ast_asm_instruction_t *> &&instructions) : ast_t(asm_block),
+            explicit ast_asm_block_t(utils::vector_t<ast_asm_instruction_t *> &&instructions) : ast_t(asm_block),
                 instructions(std::move(instructions)) {
             }
         };
@@ -87,11 +89,11 @@ namespace parser {
             immutable(ast_parameter_t)
 
 
-            vm::utils::vector_t<char> type;
-            vm::utils::vector_t<char> name;
+            utils::vector_t<char> type;
+            utils::vector_t<char> name;
 
-            ast_parameter_t(vm::utils::vector_t<char> &&type,
-                            vm::utils::vector_t<char> &&name) : ast_t(parameter), type(std::move(type)),
+            ast_parameter_t(utils::vector_t<char> &&type,
+                            utils::vector_t<char> &&name) : ast_t(parameter), type(std::move(type)),
                                                                 name(std::move(name)) {
             }
         };
@@ -99,13 +101,13 @@ namespace parser {
         struct ast_frame_t : ast_t {
             immutable(ast_frame_t)
 
-            vm::utils::str_t name;
-            vm::utils::vector_t<ast_parameter_t *> parameters;
-            vm::utils::vector_t<ast_t *> statements;
+            utils::str_t name;
+            utils::vector_t<ast_parameter_t *> parameters;
+            utils::vector_t<ast_t *> statements;
 
-            explicit ast_frame_t(vm::utils::str_t &&name,
-                                 vm::utils::vector_t<ast_parameter_t *> &&parameters,
-                                 vm::utils::vector_t<ast_t *> &&statements) : ast_t(frame),
+            explicit ast_frame_t(utils::str_t &&name,
+                                 utils::vector_t<ast_parameter_t *> &&parameters,
+                                 utils::vector_t<ast_t *> &&statements) : ast_t(frame),
                                                                               name(std::move(name)),
                                                                               parameters(std::move(parameters)),
                                                                               statements(std::move(statements)) {
@@ -115,9 +117,9 @@ namespace parser {
         struct ast_root_t : ast_t {
             immutable(ast_root_t)
 
-            vm::utils::vector_t<ast_t *> list;
+            utils::vector_t<ast_t *> list;
 
-            explicit ast_root_t(vm::utils::vector_t<ast_t *> &&list) : ast_t(root), list(std::move(list)) {
+            explicit ast_root_t(utils::vector_t<ast_t *> &&list) : ast_t(root), list(std::move(list)) {
             }
         };
 
@@ -150,10 +152,10 @@ namespace parser {
     using namespace ast;
 
     struct context_t {
-        vm::utils::vector_t<lexer::token_t> tokens;
+        utils::vector_t<lexer::token_t> tokens;
         addr_t current_pos = -1;
 
-        explicit context_t(vm::utils::vector_t<lexer::token_t> &&tokens) : tokens(std::move(tokens)) {
+        explicit context_t(utils::vector_t<lexer::token_t> &&tokens) : tokens(std::move(tokens)) {
         }
 
         addr_t pos() const {
@@ -170,7 +172,6 @@ namespace parser {
 
         lexer::token_t *next() {
             auto *out = tokens[++current_pos];
-            if (*out == lexer::eof) raise(SIGSEGV);
             return out;
         }
 
@@ -182,18 +183,18 @@ namespace parser {
             redo(1);
         }
 
-        vm::utils::res_t<lexer::token_t *, parse_error_e> accept(const lexer::token_kind_t target) {
+        utils::res_t<lexer::token_t *, parse_error_e> accept(const lexer::token_kind_t target) {
             if (*next() == target)
                 return get();
-            return parse_error_e(pos(), std::move(vm::utils::str_t()
-                                     .push(vm::utils::cstr2str("Expected "))
-                                     .push(vm::utils::cstr2str(lexer::to_string(target)))
-                                     .push(vm::utils::cstr2str(" at "))
-                                     .push(vm::utils::cstr2str(pos()))
-                                     .push(vm::utils::cstr2str(" but "))
-                                     .push(vm::utils::cstr2str(lexer::to_string(get()->kind)))
-                                     .push(vm::utils::cstr2str(" provided."))
-                                     .trim()));
+            return parse_error_e(pos(), utils::str_t()
+                                     .push(utils::cstr2str("Expected "))
+                                     .push(utils::cstr2str(lexer::to_string(target)))
+                                     .push(utils::cstr2str(" at "))
+                                     .push(utils::cstr2str(pos()))
+                                     .push(utils::cstr2str(" but "))
+                                     .push(utils::cstr2str(lexer::to_string(get()->kind)))
+                                     .push(utils::cstr2str(" provided."))
+                                     .trim().move());
         }
 
         bool probe(const lexer::token_kind_t prober) {
@@ -228,7 +229,22 @@ namespace parser {
             return out;
         }
 
-        vm::utils::res_t<ast_asm_block_t *, parse_error_e> parse_asm_block() {
+        utils::res_t<ast_asm_instruction_t *, parse_error_e> parse_asm_instruction() {
+            utils::vector_t<ast_asm_part_t *> parts;
+
+            do {
+                auto res = accept(lexer::ident).disown_m();
+                if (!res)
+                    return res.error_m();
+                parts.push(new ast_asm_part_t(res.value()->literal.copy()));
+            } while (probe_not_and_redo_if(lexer::semicolon, true));
+
+            return new ast_asm_instruction_t(std::move(parts));
+        }
+
+        utils::res_t<ast_asm_block_t *, parse_error_e> parse_asm_block() {
+            utils::vector_t<ast_asm_instruction_t *> instructions;
+
             auto asmm = accept(lexer::asmm).disown_m();
             if (!asmm)
                 return asmm.error_m();
@@ -238,24 +254,29 @@ namespace parser {
                 return asmm.error_m();
 
             while (probe_not_and_redo_if(lexer::r_brace, true)) {
-                next();
+                auto res = parse_asm_instruction().disown_m();
+                if (!res)
+                    return res.error_m();
+
+                instructions.push(res.value());
             }
 
-            return new ast_asm_block_t(vm::utils::vector_t<ast_asm_instruction_t *>());
+            return new ast_asm_block_t(std::move(instructions));
         }
 
-        vm::utils::res_t<ast_t *, parse_error_e> parse_statement() {
+        utils::res_t<ast_t *, parse_error_e> parse_statement() {
             if (probe_and_redo(lexer::asmm)) {
                 return parse_asm_block().disown_m();
             }
 
-            return parse_error_e(pos(), std::move(vm::utils::str_t()
-                                     .push(vm::utils::cstr2str("Expected asm but "))
-                                     .push(vm::utils::cstr2str(lexer::to_string(get()->kind)))
-                                     .push(vm::utils::cstr2str(" provided."))));
+            return parse_error_e(pos(), utils::str_t()
+                                     .push(utils::cstr2str("Expected asm but "))
+                                     .push(utils::cstr2str(lexer::to_string(get()->kind)))
+                                     .push(utils::cstr2str(" provided."))
+                                     .move());
         }
 
-        vm::utils::res_t<ast_parameter_t *, parse_error_e> parse_parameter() {
+        utils::res_t<ast_parameter_t *, parse_error_e> parse_parameter() {
             auto type = std::move(accept(lexer::ident).disown());
             if (!type) return type.error_m();
 
@@ -265,7 +286,7 @@ namespace parser {
             return new ast_parameter_t(type.value()->literal.copy(), name.value()->literal.copy());
         }
 
-        vm::utils::res_t<ast_frame_t *, parse_error_e> parse_frame() {
+        utils::res_t<ast_frame_t *, parse_error_e> parse_frame() {
             if (auto fun = std::move(accept(lexer::fun).disown()); !fun)
                 return fun.error_m();
 
@@ -276,7 +297,7 @@ namespace parser {
             if (auto lpr = std::move(accept(lexer::l_paren).disown()); !lpr)
                 return lpr.error_m();
 
-            vm::utils::vector_t<ast_parameter_t *> params;
+            utils::vector_t<ast_parameter_t *> params;
             if (probe_not_and_redo_if(lexer::r_paren, true)) {
                 do {
                     auto par = std::move(parse_parameter().disown());
@@ -288,11 +309,10 @@ namespace parser {
                     return rpr.error_m();
             }
 
-            auto lbr = accept(lexer::l_brace).disown_m();
-            if (!lbr)
+            if (auto lbr = accept(lexer::l_brace).disown_m(); !lbr)
                 return lbr.error_m();
 
-            vm::utils::vector_t<ast_t *> statements;
+            utils::vector_t<ast_t *> statements;
             while (probe_not_and_redo_if(lexer::r_brace, true)) {
                 auto stmt = parse_statement().disown_m();
                 if (!stmt)
@@ -301,16 +321,18 @@ namespace parser {
                 statements.push(stmt.value());
             }
 
-            return new ast_frame_t(name.value()->literal.copy(), std::move(params), std::move(statements));
+            return new ast_frame_t(name.value()->literal.copy(), std::move(params), statements.move());
         }
 
-        vm::utils::res_t<ast_root_t *, parse_error_e> parse() {
-            auto out = vm::utils::vector_t<ast_t *>();
+        utils::res_t<ast_root_t *, parse_error_e> parse() {
+            auto out = utils::vector_t<ast_t *>();
 
-            auto res = parse_frame().disown_m();
-            if (!res)
-                return res.error_m();
-            out.emplace(res.value());
+            while (probe_not_and_redo_if(lexer::eof, true)) {
+                auto res = parse_frame().disown_m();
+                if (!res)
+                    return res.error_m();
+                out.push(res.value());
+            }
 
             return new ast_root_t(std::move(out));
         }

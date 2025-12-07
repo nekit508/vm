@@ -29,7 +29,7 @@ const char * lexer::to_string(token_kind_t e) {
 lexer::token_t::token_t(): pos(0), kind(null) {
 }
 
-lexer::token_t::token_t(const addr_t pos, const token_kind_t kind, vm::utils::str_t &&literal): pos(pos),
+lexer::token_t::token_t(const addr_t pos, const token_kind_t kind, utils::str_t &&literal): pos(pos),
                                                                                           kind(kind),
                                                                                           literal(std::move(literal)) {
 }
@@ -110,8 +110,8 @@ void lexer::context_t::skip_while(const char *list) {
     stream << 1;
 }
 
-vm::utils::str_t lexer::context_t::read_until(const char *list) {
-    vm::utils::str_t out;
+utils::str_t lexer::context_t::read_until(const char *list) {
+    utils::str_t out;
 
     for (bool exit = false; !exit;) {
         char c = read_one();
@@ -128,8 +128,8 @@ vm::utils::str_t lexer::context_t::read_until(const char *list) {
     return out;
 }
 
-vm::utils::str_t lexer::context_t::read_while(const char *list) {
-    vm::utils::str_t out;
+utils::str_t lexer::context_t::read_while(const char *list) {
+    utils::str_t out;
 
     for (bool exit = false; !exit;) {
         char c = read_one();
@@ -153,7 +153,7 @@ void lexer::context_t::skip_white_spaces() {
 
 lexer::token_t lexer::context_t::parse_ident_or_keyword() {
     token_kind_t out_kind = ident;
-    vm::utils::str_t literal(std::move(read_while(ident_body)));
+    utils::str_t literal(std::move(read_while(ident_body)));
 
     for (const auto &[name, kind] : keywords)
         if (name == literal) {
@@ -167,7 +167,7 @@ lexer::token_t lexer::context_t::parse_ident_or_keyword() {
 
 lexer::token_t lexer::context_t::parse_number() {
     token_kind_t kind = num;
-    vm::utils::str_t literal(std::move(read_while(number)));
+    utils::str_t literal(std::move(read_while(number)));
     literal.trim();
     return token_t{stream.pos(), kind, std::move(literal)};
 }
@@ -189,7 +189,7 @@ lexer::tokens_t lexer::context_t::parse() {
             } else {
                 // try to parse one-symbol token
                 const addr_t pos = stream.pos();
-                vm::utils::str_t literal;
+                utils::str_t literal;
                 literal.emplace(std::move(c));
                 bool processed = true;
                 switch (c) {
@@ -235,7 +235,7 @@ lexer::tokens_t lexer::context_t::parse() {
             }
         }
     } catch (const eof_e &) {
-        out.emplace(token_t(stream.pos(), eof, vm::utils::str_t()));
+        out.emplace(token_t(stream.pos(), eof, utils::str_t()));
     }
 
     return out;

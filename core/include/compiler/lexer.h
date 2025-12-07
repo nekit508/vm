@@ -4,6 +4,7 @@
 
 namespace lexer {
     inline auto white_space = "\t\n\r ";
+
     inline auto ident_start = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_$";
     inline auto ident_body = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM_$0123456789";
 
@@ -29,35 +30,38 @@ namespace lexer {
         eof
     };
 
+    void is_prime() {
+    }
+
     const char *to_string(token_kind_t e);
 
     struct keyword_t {
-        vm::utils::str_t name;
+        utils::str_t name;
         token_kind_t kind;
     };
 
     inline keyword_t keywords_arr[] = {
-        keyword_t(vm::utils::cstr2str("fun"), fun),
+        keyword_t(utils::cstr2str("fun"), fun),
 
-        keyword_t(vm::utils::cstr2str("false"), falsee),
-        keyword_t(vm::utils::cstr2str("true"), truee),
+        keyword_t(utils::cstr2str("false"), falsee),
+        keyword_t(utils::cstr2str("true"), truee),
 
-        keyword_t(vm::utils::cstr2str("if"), iff),
-        keyword_t(vm::utils::cstr2str("asm"), asmm)
+        keyword_t(utils::cstr2str("if"), iff),
+        keyword_t(utils::cstr2str("asm"), asmm)
     };
 
-    inline vm::utils::vector_t<keyword_t> keywords(vm::utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false), sizeof(keywords_arr) / sizeof(keyword_t));
+    inline utils::vector_t<keyword_t> keywords(utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false), sizeof(keywords_arr) / sizeof(keyword_t));
 
     const char *to_string(token_kind_t e);
 
     struct token_t {
         addr_t pos;
         token_kind_t kind;
-        vm::utils::str_t literal;
+        utils::str_t literal;
 
         token_t();
 
-        token_t(addr_t pos, token_kind_t kind, vm::utils::str_t &&literal);
+        token_t(addr_t pos, token_kind_t kind, utils::str_t &&literal);
 
         token_t(const token_t &other);
 
@@ -72,10 +76,10 @@ namespace lexer {
         bool operator!=(const token_kind_t &other) const;
     };
 
-    typedef vm::utils::vector_t<token_t> tokens_t;
+    typedef utils::vector_t<token_t> tokens_t;
 
     struct context_t {
-        vm::utils::stream_t<char> stream;
+        utils::stream_t<char> stream;
 
         bool in(char c, const char *list);
 
@@ -85,9 +89,9 @@ namespace lexer {
 
         void skip_while(const char *list);
 
-        vm::utils::str_t read_until(const char *list);
+        utils::str_t read_until(const char *list);
 
-        vm::utils::str_t read_while(const char *list);
+        utils::str_t read_while(const char *list);
 
         void skip_white_spaces();
 

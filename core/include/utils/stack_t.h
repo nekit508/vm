@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-namespace vm::utils {
+namespace utils {
     struct stack_t {
         char *start, *end, *pos;
 

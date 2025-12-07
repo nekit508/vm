@@ -5,7 +5,7 @@
 
 #include "defs.h"
 
-namespace vm::utils {
+namespace utils {
     struct ram_file_t {
         FILE *fp;
         int fd;
