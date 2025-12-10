@@ -32,6 +32,10 @@ namespace compiler {
 template<typename A> requires utils::allocator_c<A> \
 static constexpr void name(utils::vector_t<char, A> *vector)
 
+#define writem(name, args...) \
+template<typename A> requires utils::allocator_c<A> \
+static constexpr void name(utils::vector_t<char, A> *vector, args)
+
         write(dbg_brk) {
             utils::write2vec(vector, instructions::dbg_brk);
         }
@@ -46,6 +50,11 @@ static constexpr void name(utils::vector_t<char, A> *vector)
 
         write(ill) {
             utils::write2vec(vector, instructions::ill);
+        }
+
+        writem(jmp, s_addr_t to) {
+            utils::write2vec(vector, instructions::jmp);
+            utils::write2vec(vector, to);
         }
 
 #undef write
@@ -74,7 +83,10 @@ static constexpr void name(utils::vector_t<char, A> *vector)
                 } else if (instructions::ret_literal == part->literal) {
                     writer::ret(&current_frame->code);
                 } else if (instructions::jmp_literal == part->literal) {
-                    //writer::(&current_frame->code);
+                    utils::str_t c((*parts[1])->literal.copy());
+                    const auto d = c.emplace(0).data();
+                    const auto addr = static_cast<s_addr_t>(std::stoul(d));
+                    writer::jmp(&current_frame->code, addr);
                 } else if (instructions::call_literal == part->literal) {
                     //writer::ca(&current_frame->code);
                 } else if (instructions::dbg_brk_literal == part->literal) {
@@ -92,6 +104,7 @@ static constexpr void name(utils::vector_t<char, A> *vector)
 
         void compile_frame(parser::ast_frame_t *frame) {
             frame_info info;
+            // ReSharper disable once CppDFALocalValueEscapesFunction
             current_frame = &info;
 
             current_frame->name = frame->name;

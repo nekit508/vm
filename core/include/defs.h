@@ -14,6 +14,9 @@ code \
 typedef uint64_t addr_t;
 typedef int64_t r_addr_t;
 
+typedef uint16_t s_addr_t;
+typedef int16_t r_s_addr_t;
+
 inline constexpr size_t word_size(sizeof(void *));
 
 struct frame_meta {
@@ -52,8 +55,15 @@ template<typename T>
 constexpr T rptr(char *ptr) {
     return *reinterpret_cast<T *>(ptr);
 }
+
 template<typename T>
-constexpr T rptrs(char *ptr, T &d) {
+constexpr size_t rptrs(char *ptr, T &d) {
     d = *reinterpret_cast<T *>(ptr);
     return sizeof(T);
+}
+
+template<typename T>
+constexpr char *rptrsp(char *ptr, T &d) {
+    d = *reinterpret_cast<T *>(ptr);
+    return ptr + sizeof(T);
 }

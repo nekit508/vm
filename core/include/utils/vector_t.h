@@ -15,7 +15,8 @@ namespace utils {
         addr_t data_start, data_end;
         size_t size;
 
-        slice_t(T *data, const addr_t start, const addr_t end) : data(data), data_start(start), data_end(end), size(end - start) {
+        slice_t(T *data, const addr_t start, const addr_t end) : data(data), data_start(start), data_end(end),
+                                                                 size(end - start) {
         }
 
         slice_t(T *data, const size_t size) : slice_t(data, 0, size) {
@@ -26,11 +27,11 @@ namespace utils {
         slice_t(slice_t &&other) = delete;
 
         T *begin() {
-           return data + data_start;
+            return data + data_start;
         }
 
         T *end() {
-           return data + data_end ;
+            return data + data_end;
         }
 
         T *operator[](addr_t index) {
@@ -40,6 +41,10 @@ namespace utils {
                 }
             )
             return data + data_start + index;
+        }
+
+        T &get(addr_t index) {
+            return *(data + data_start + index);
         }
 
         slice_t operator[](const addr_t from, const addr_t to, const bool back = false) {
@@ -54,7 +59,7 @@ namespace utils {
      * - push - creates new object in new cell with a copy constructor
      * - place - creates new object in old cell with a move constructor
      */
-    template<typename T, typename A = heap_allocator_t<>> requires allocator_c<A>
+    template<typename T, typename A = heap_allocator_t<> > requires allocator_c<A>
     struct vector_t {
         typedef T data_type;
         typedef A alloc_type;
@@ -98,6 +103,10 @@ namespace utils {
 
         data_type *operator[](const addr_t ind) const {
             return data() + ind;
+        }
+
+        data_type &get(const addr_t ind) {
+            return *(data() + ind);
         }
 
         slice_t<data_type> as_slice() {
@@ -267,19 +276,27 @@ namespace utils {
         { std::to_string(o) } -> std::same_as<std::string>;
     };
 
-    template<typename T, std::string (*parser)(T) = nullptr> requires
+    template<typename T, typename V = std::string, V (*parser)(T) = nullptr> requires
         (std::is_same_v<T, char *> || std::is_same_v<T, const char *> || is_trivially_to_string<T> || parser != nullptr)
-    constexpr str_t cstr2str(T value) {
+        && (std::is_same_v<V, const char *> || std::is_same_v<V, std::string>)
+    constexpr str_t obj2str(T value) {
         if constexpr (std::is_same_v<T, char *> || std::is_same_v<T, const char *>)
-            return str_t().push(slice_t(const_cast<char *>(value), strlen(value)));
+            return str_t().push(slice_t(const_cast<char *>(value), strlen(value))).trim();
         else {
-            std::string s;
-            if constexpr (parser == nullptr)
-                s = std::to_string(value);
-            else
-                s = parser(value);
-            char *str = const_cast<char *>(s.c_str());
-            return str_t().push(slice_t(str, 0, strlen(str)));
+            char *str = nullptr;
+            if constexpr (std::is_same_v<V, std::string>) {
+                std::string s;
+                if constexpr (parser == nullptr)
+                    s = std::to_string(value);
+                else
+                    s = parser(value);
+                str = const_cast<char *>(s.c_str());
+            } else if constexpr (std::is_same_v<V, const char *>) {
+                str = const_cast<char *>(parser(value));
+            } else {
+                raise(SIGABRT);
+            }
+            return str_t().push(slice_t(str, 0, strlen(str))).trim();
         }
     }
 

@@ -30,9 +30,6 @@ namespace lexer {
         eof
     };
 
-    void is_prime() {
-    }
-
     const char *to_string(token_kind_t e);
 
     struct keyword_t {
@@ -41,13 +38,13 @@ namespace lexer {
     };
 
     inline keyword_t keywords_arr[] = {
-        keyword_t(utils::cstr2str("fun"), fun),
+        keyword_t(utils::obj2str("fun"), fun),
 
-        keyword_t(utils::cstr2str("false"), falsee),
-        keyword_t(utils::cstr2str("true"), truee),
+        keyword_t(utils::obj2str("false"), falsee),
+        keyword_t(utils::obj2str("true"), truee),
 
-        keyword_t(utils::cstr2str("if"), iff),
-        keyword_t(utils::cstr2str("asm"), asmm)
+        keyword_t(utils::obj2str("if"), iff),
+        keyword_t(utils::obj2str("asm"), asmm)
     };
 
     inline utils::vector_t<keyword_t> keywords(utils::heap_allocator_t(keywords_arr, sizeof(keywords_arr) / sizeof(keyword_t), false), sizeof(keywords_arr) / sizeof(keyword_t));
@@ -74,6 +71,8 @@ namespace lexer {
         bool operator==(const token_kind_t &other) const;
 
         bool operator!=(const token_kind_t &other) const;
+
+        operator token_kind_t() const;
     };
 
     typedef utils::vector_t<token_t> tokens_t;

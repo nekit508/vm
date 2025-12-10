@@ -70,6 +70,10 @@ bool lexer::token_t::operator!=(const token_kind_t &other) const {
     return kind != other;
 }
 
+lexer::token_t::operator token_kind_t() const {
+    return kind;
+}
+
 bool lexer::context_t::in(const char c, const char *list) {
     for (const char *l = list; *l; l++)
         if (c == *l)

@@ -61,7 +61,7 @@ namespace parser {
             utils::str_t literal;
 
             explicit ast_asm_part_t(utils::str_t &&literal) : ast_t(asm_part),
-                                                                  literal(std::move(literal)) {
+                                                              literal(std::move(literal)) {
             }
         };
 
@@ -94,7 +94,7 @@ namespace parser {
 
             ast_parameter_t(utils::vector_t<char> &&type,
                             utils::vector_t<char> &&name) : ast_t(parameter), type(std::move(type)),
-                                                                name(std::move(name)) {
+                                                            name(std::move(name)) {
             }
         };
 
@@ -108,9 +108,9 @@ namespace parser {
             explicit ast_frame_t(utils::str_t &&name,
                                  utils::vector_t<ast_parameter_t *> &&parameters,
                                  utils::vector_t<ast_t *> &&statements) : ast_t(frame),
-                                                                              name(std::move(name)),
-                                                                              parameters(std::move(parameters)),
-                                                                              statements(std::move(statements)) {
+                                                                          name(std::move(name)),
+                                                                          parameters(std::move(parameters)),
+                                                                          statements(std::move(statements)) {
             }
         };
 
@@ -187,14 +187,38 @@ namespace parser {
             if (*next() == target)
                 return get();
             return parse_error_e(pos(), utils::str_t()
-                                     .push(utils::cstr2str("Expected "))
-                                     .push(utils::cstr2str(lexer::to_string(target)))
-                                     .push(utils::cstr2str(" at "))
-                                     .push(utils::cstr2str(pos()))
-                                     .push(utils::cstr2str(" but "))
-                                     .push(utils::cstr2str(lexer::to_string(get()->kind)))
-                                     .push(utils::cstr2str(" provided."))
-                                     .trim().move());
+                                 .push(utils::obj2str("Expected "))
+                                 .push(utils::obj2str(lexer::to_string(target)))
+                                 .push(utils::obj2str(" at "))
+                                 .push(utils::obj2str(pos()))
+                                 .push(utils::obj2str(" but "))
+                                 .push(utils::obj2str(lexer::to_string(get()->kind)))
+                                 .push(utils::obj2str(" provided."))
+                                 .trim().move());
+        }
+
+        utils::res_t<lexer::token_t *, parse_error_e> accept(const std::initializer_list<lexer::token_kind_t> any) {
+            auto *token = next();
+
+            for (const auto &target: any) {
+                if (*token == target)
+                    return token;
+            }
+
+            utils::str_t error;
+            error.push(utils::obj2str("Expected any of: [ "));
+            for (const auto &target: any)
+                error
+                        .push(utils::obj2str<lexer::token_kind_t, const char *, lexer::to_string>(target))
+                        .push(utils::obj2str(" "));
+            error.push(utils::obj2str("] at "))
+                    .push(utils::obj2str(pos()))
+                    .push(utils::obj2str(" but "))
+                    .push(utils::obj2str(lexer::to_string(get()->kind)))
+                    .push(utils::obj2str(" provided."))
+                    .trim();
+
+            return parse_error_e(pos(), error.move());
         }
 
         bool probe(const lexer::token_kind_t prober) {
@@ -233,7 +257,7 @@ namespace parser {
             utils::vector_t<ast_asm_part_t *> parts;
 
             do {
-                auto res = accept(lexer::ident).disown_m();
+                auto res = accept({lexer::ident, lexer::num}).disown().move();
                 if (!res)
                     return res.error_m();
                 parts.push(new ast_asm_part_t(res.value()->literal.copy()));
@@ -245,16 +269,16 @@ namespace parser {
         utils::res_t<ast_asm_block_t *, parse_error_e> parse_asm_block() {
             utils::vector_t<ast_asm_instruction_t *> instructions;
 
-            auto asmm = accept(lexer::asmm).disown_m();
+            auto asmm = accept(lexer::asmm).disown().move();
             if (!asmm)
                 return asmm.error_m();
 
-            auto lbr = accept(lexer::l_brace).disown_m();
+            auto lbr = accept(lexer::l_brace).disown().move();
             if (!asmm)
                 return asmm.error_m();
 
             while (probe_not_and_redo_if(lexer::r_brace, true)) {
-                auto res = parse_asm_instruction().disown_m();
+                auto res = parse_asm_instruction().disown().move();
                 if (!res)
                     return res.error_m();
 
@@ -266,14 +290,14 @@ namespace parser {
 
         utils::res_t<ast_t *, parse_error_e> parse_statement() {
             if (probe_and_redo(lexer::asmm)) {
-                return parse_asm_block().disown_m();
+                return parse_asm_block().disown().move();
             }
 
             return parse_error_e(pos(), utils::str_t()
-                                     .push(utils::cstr2str("Expected asm but "))
-                                     .push(utils::cstr2str(lexer::to_string(get()->kind)))
-                                     .push(utils::cstr2str(" provided."))
-                                     .move());
+                                 .push(utils::obj2str("Expected asm but "))
+                                 .push(utils::obj2str(lexer::to_string(get()->kind)))
+                                 .push(utils::obj2str(" provided."))
+                                 .move());
         }
 
         utils::res_t<ast_parameter_t *, parse_error_e> parse_parameter() {
@@ -309,12 +333,12 @@ namespace parser {
                     return rpr.error_m();
             }
 
-            if (auto lbr = accept(lexer::l_brace).disown_m(); !lbr)
+            if (auto lbr = accept(lexer::l_brace).disown().move(); !lbr)
                 return lbr.error_m();
 
             utils::vector_t<ast_t *> statements;
             while (probe_not_and_redo_if(lexer::r_brace, true)) {
-                auto stmt = parse_statement().disown_m();
+                auto stmt = parse_statement().disown().move();
                 if (!stmt)
                     return stmt.error_m();
 
@@ -328,7 +352,7 @@ namespace parser {
             auto out = utils::vector_t<ast_t *>();
 
             while (probe_not_and_redo_if(lexer::eof, true)) {
-                auto res = parse_frame().disown_m();
+                auto res = parse_frame().disown().move();
                 if (!res)
                     return res.error_m();
                 out.push(res.value());
