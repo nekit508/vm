@@ -1,40 +1,109 @@
 #pragma once
 
 #include <string>
-#include <vector>
 
 #include "allocators.h"
 #include "defs.h"
 
 namespace utils {
+    template<typename T, bool owns = true>
+    struct container_t {
+        static_assert(owns || std::is_pointer_v<T>, "Value contained objects must be owned!");
+        T data;
+
+        operator T() {
+            return data;
+        }
+
+        T operator*() {
+            return data;
+        }
+
+        container_t() : data(T()) {
+        }
+
+        container_t(const T &data) : data(data) {
+        }
+
+        container_t(T &&data) : data(std::move(data)) {
+        }
+
+        container_t(const container_t &other)
+            : data(other.data) {
+            static_assert(not (owns && std::is_pointer_v<T>), "Owned pointer cannot be copied.");
+        }
+
+        container_t(container_t &&other) noexcept
+            : data(std::move(other.data)) {
+            if constexpr (std::is_pointer_v<T>)
+                other.data = nullptr;
+        }
+
+        container_t &operator=(const container_t &other) {
+            static_assert(not (owns && std::is_pointer_v<T>), "Owned pointer cannot be copied.");
+
+            if (this == &other)
+                return *this;
+
+            this->~container_t();
+
+            data = other.data;
+            return *this;
+        }
+
+        container_t & operator=(container_t &&other) noexcept {
+            if (this == &other)
+                return *this;
+
+            this->~container_t();
+
+            data = std::move(other.data);
+            if constexpr (std::is_pointer_v<T>)
+                other.data = nullptr;
+
+            return *this;
+        }
+
+        ~container_t() {
+            if constexpr (owns && std::is_pointer_v<T>)
+                if (data != nullptr)
+                    delete data;
+        }
+
+        container_t &&move() {
+            return std::move(*this);
+        }
+    };
+
     /** Slices shouldn't own memory. [start;end) */
     template<typename T>
     struct slice_t {
-        T *data;
+        typedef T data_type;
+        data_type *data;
 
         addr_t data_start, data_end;
         size_t size;
 
-        slice_t(T *data, const addr_t start, const addr_t end) : data(data), data_start(start), data_end(end),
+        slice_t(data_type *data, const addr_t start, const addr_t end) : data(data), data_start(start), data_end(end),
                                                                  size(end - start) {
         }
 
-        slice_t(T *data, const size_t size) : slice_t(data, 0, size) {
+        slice_t(data_type *data, const size_t size) : slice_t(data, 0, size) {
         }
 
         slice_t(const slice_t &other) = default;
 
         slice_t(slice_t &&other) = delete;
 
-        T *begin() {
+        data_type *begin() {
             return data + data_start;
         }
 
-        T *end() {
+        data_type *end() {
             return data + data_end;
         }
 
-        T *operator[](addr_t index) {
+        data_type *operator[](addr_t index) {
             if_debug_memory(
                 if (data_start + index >= data_end) {
                 memory_error("index bounds out of slice")
@@ -43,7 +112,7 @@ namespace utils {
             return data + data_start + index;
         }
 
-        T &get(addr_t index) {
+        data_type &get(addr_t index) {
             return *(data + data_start + index);
         }
 
@@ -59,9 +128,18 @@ namespace utils {
      * - push - creates new object in new cell with a copy constructor
      * - place - creates new object in old cell with a move constructor
      */
-    template<typename T, typename A = heap_allocator_t<> > requires allocator_c<A>
+    template<typename T, typename A = heap_allocator_t<>, typename C = container_t<T> > requires allocator_c<A>
     struct vector_t {
+        static_assert(sizeof(C) == sizeof(T));
+
         typedef T data_type;
+        typedef C container_type;
+
+        static constexpr container_type *container(data_type *data) {
+            return reinterpret_cast<container_type *>(data);
+        }
+        static constexpr size_t data_size = sizeof(T);
+
         typedef A alloc_type;
 
         alloc_type allocator;
@@ -120,7 +198,7 @@ namespace utils {
         vector_t(const vector_t &other)
             : allocator(other.allocator),
               size(other.size) {
-            for (int i = 0; i < other.size; i++) place(i, T(*(other.data() + i)));
+            for (int i = 0; i < other.size; i++) place(i, container_type(*other[i]));
         }
 
         vector_t &operator=(const vector_t &other) {
@@ -130,7 +208,7 @@ namespace utils {
 
             allocator = other.allocator;
             size = other.size;
-            for (int i = 0; i < size; i++) place(i, T(*(other.data() + i)));
+            for (int i = 0; i < size; i++) place(i, container_type(*other[i]));
 
             return *this;
         }
@@ -170,7 +248,7 @@ namespace utils {
 
         vector_t &push(const data_type &t) {
             set_size(size + 1);
-            new(static_cast<void *>(data() + size++)) data_type(t);
+            new(static_cast<void *>(data() + size++)) container_type(t);
             return *this;
         }
 
@@ -178,20 +256,20 @@ namespace utils {
             set_size(size + 1);
             if (size - ind > 0)
                 allocator.move(data() + ind + 1, data() + ind, size++ - ind);
-            new(static_cast<void *>(data() + ind)) data_type(t);
+            new(static_cast<void *>(data() + ind)) container_type(t);
             return *this;
         }
 
         vector_t &push(slice_t<data_type> slice) {
             set_size(size + slice.size);
             for (addr_t i = 0; i < slice.size; i++)
-                new(static_cast<void *>(data() + size++)) data_type(*slice[i]);
+                new(static_cast<void *>(data() + size++)) container_type(*slice[i]);
             return *this;
         }
 
         vector_t &emplace(data_type &&t) {
             set_size(size + 1);
-            new(static_cast<void *>(data() + size++)) data_type(std::move(t));
+            new(static_cast<void *>(data() + size++)) container_type(std::move(t));
             return *this;
         }
 
@@ -199,46 +277,44 @@ namespace utils {
             set_size(size + 1);
             if (size - ind > 0)
                 allocator.move(data() + ind + 1, data() + ind, size++ - ind);
-            new(static_cast<void *>(data() + ind)) data_type(std::move(t));
+            new(static_cast<void *>(data() + ind)) container_type(std::move(t));
             return *this;
         }
 
         vector_t &emplace(slice_t<data_type> slice) {
             set_size(size + slice.size);
             for (addr_t i = 0; i < slice.size; i++)
-                new(static_cast<void *>(data() + size++)) data_type(std::move(*slice[i]));
+                new(static_cast<void *>(data() + size++)) container_type(std::move(*slice[i]));
             return *this;
         }
 
         vector_t &place(addr_t ind, data_type &&t) {
-            new(static_cast<void *>(data() + ind)) data_type(std::move(t));
+            new(static_cast<void *>(data() + ind)) container_type(std::move(t));
             return *this;
         }
 
         vector_t &place(addr_t ind, slice_t<data_type> slice) {
             for (addr_t i = 0; i < slice.size; i++)
-                new(static_cast<void *>(data() + ind + i)) data_type(std::move(slice[i]));
+                new(static_cast<void *>(data() + ind + i)) container_type(std::move(slice[i]));
             return *this;
         }
 
         vector_t &set_size(const size_t desired_size) {
-            allocator.alloc(sizeof(data_type) * desired_size);
+            allocator.alloc(data_size * desired_size);
             return *this;
         }
 
-        vector_t &erase(addr_t ind) {
-            data_type *p = data() + ind;
-            delete_value(p, data_type)
+        vector_t &erase(const addr_t ind) {
+            data_type *ptr = this->operator[](ind);
+            container(ptr)->~container_type();
             if (const size_t m = size-- - ind; m > 0)
-                memmove(p, p + 1, m);
+                memmove(ptr, ptr + 1, m);
             return *this;
         }
 
         vector_t &erase(slice_t<data_type> slice) {
             for (addr_t i = 0; i < slice.size; i++) {
-                if constexpr (__is_pointer(data_type))
-                    delete *slice[i];
-                else slice[i]->~data_type();
+                container(slice[i])->~container_type();
             }
             if (const size_t m = size - slice.data_end; m > 0)
                 memmove(slice[0], slice[slice.size - 1] + 1, m);

@@ -1,8 +1,21 @@
 #pragma once
 #include <cstdint>
 #include <stddef.h>
+#include <type_traits>
+/** No move and copy. */
+#define immutable(type) \
+type(type &&other) = delete; \
+type(const type &other) = delete; \
+type &operator=(type &&other) = delete; \
+type &operator=(const type &other) = delete;
 
-#define delete_value(value, T) {if constexpr (__is_pointer(T)) delete *value; else value->~T();}
+/** Only move constructor - no set-move and copy. */
+#define constant(type) \
+type(const type &other) = delete; \
+type &operator=(type &&other) = delete; \
+type &operator=(const type &other) = delete;
+
+#define delete_value(value, T) {if constexpr (std::is_pointer_v<T>) delete *value; else value->~T();}
 
 #define debug_memory true
 #define if_debug_memory(code) \

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/vector_t.h"
+
 namespace instructions {
     enum opcode_t {
         nop = 0,
@@ -9,6 +11,9 @@ namespace instructions {
 
         // 16b
         jmp,
+
+        // 64b
+        calln,
         call,
     };
 
@@ -18,4 +23,5 @@ namespace instructions {
     inline utils::str_t dbg_brk_literal = utils::obj2str("dbg_brk");
     inline utils::str_t jmp_literal = utils::obj2str("jmp");
     inline utils::str_t call_literal = utils::obj2str("call");
+    inline utils::str_t calln_literal = utils::obj2str("calln");
 }

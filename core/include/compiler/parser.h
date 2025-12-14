@@ -1,17 +1,10 @@
 #pragma once
-#include <algorithm>
 
 #include "bits/move.h"
 #include <iostream>
 
 #include "lexer.h"
 #include "utils.h"
-
-#define immutable(type) \
-    type(type &&other) = delete; \
-    type(const type &other) = delete; \
-    type &operator=(type &&other) = delete; \
-    type &operator=(const type &other) = delete;
 
 namespace parser {
     struct parse_error_e {
@@ -25,7 +18,6 @@ namespace parser {
         }
 
         explicit parse_error_e(const addr_t pos, utils::str_t &&message) : pos(pos), message(std::move(message)) {
-            0;
         }
     };
 
@@ -59,9 +51,10 @@ namespace parser {
             immutable(ast_asm_part_t)
 
             utils::str_t literal;
+            lexer::token_kind_t kind;
 
-            explicit ast_asm_part_t(utils::str_t &&literal) : ast_t(asm_part),
-                                                              literal(std::move(literal)) {
+            explicit ast_asm_part_t(utils::str_t &&literal, lexer::token_kind_t kind) : ast_t(asm_part),
+                                                              literal(std::move(literal)), kind(kind) {
             }
         };
 
@@ -87,7 +80,6 @@ namespace parser {
 
         struct ast_parameter_t : ast_t {
             immutable(ast_parameter_t)
-
 
             utils::vector_t<char> type;
             utils::vector_t<char> name;
@@ -257,10 +249,19 @@ namespace parser {
             utils::vector_t<ast_asm_part_t *> parts;
 
             do {
-                auto res = accept({lexer::ident, lexer::num}).disown().move();
+                auto res = accept({lexer::ident, lexer::num, lexer::colon}).disown().move();
                 if (!res)
                     return res.error_m();
-                parts.push(new ast_asm_part_t(res.value()->literal.copy()));
+
+                parts.push(new ast_asm_part_t(res.value()->literal.copy(), res.value()->kind));
+
+                if (res.value()->kind == lexer::colon) {
+                    auto i = accept({lexer::ident}).disown().move();
+                    if (!i)
+                        return res.error_m();
+
+                    parts.push(new ast_asm_part_t(i.value()->literal.copy(), res.value()->kind));
+                }
             } while (probe_not_and_redo_if(lexer::semicolon, true));
 
             return new ast_asm_instruction_t(std::move(parts));

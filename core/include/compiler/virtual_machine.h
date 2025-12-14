@@ -117,7 +117,7 @@ namespace virtual_machine {
                         // TODO exit frame correctly
                         break;
                     case ins::jmp: // jump to operation (frame start relative)
-                        frame->code_pos = *as<s_addr_t>(code[info->code_start + frame->code_pos]);
+                        frame->code_pos = *as<addr_t>(code[info->code_start + frame->code_pos]);
                         break;
                     case ins::call: // call another frame
                         // TODO call instruction decode
