@@ -6,8 +6,8 @@ namespace utils {
     template<typename T>
     concept allocator_c = requires(T o, const size_t s, void *vp, bool b)
     {
-        { o.alloc(s) } -> std::same_as<void>;
-        { o.alloc(s, b) } -> std::same_as<void>;
+        { o.set_size(s) } -> std::same_as<void>;
+        { o.set_size(s, b) } -> std::same_as<void>;
         { o.data() } -> std::same_as<void *>;
         { o.move(vp, vp, s) } -> std::same_as<void>;
     };
@@ -22,7 +22,7 @@ namespace utils {
         }
 
         explicit file_allocator_t(FILE *fd) : fd(fd) {
-            alloc(0, true);
+            set_size(0, true);
         }
 
         file_allocator_t(file_allocator_t &&other) noexcept
@@ -57,11 +57,12 @@ namespace utils {
             if (fd) fclose(fd);
         }
 
-        void alloc(const size_t size, const bool direct = false) {
+        void set_size(const size_t size, const bool direct = false) {
             if (!mem) {
                 fseek(fd, 0, SEEK_END);
                 capacity = ftell(fd);
-                mem = mmap(nullptr, capacity, access_type, MAP_SHARED | MADV_RANDOM, fileno(fd), 0);
+                auto page_size = sysconf(_SC_PAGE_SIZE);
+                mem = mmap(nullptr, capacity % page_size ? (capacity / page_size + 1) * page_size : capacity, access_type, MAP_SHARED | MADV_RANDOM, fileno(fd), 0);
             }
         }
 
@@ -91,7 +92,7 @@ namespace utils {
 
         heap_allocator_t(const heap_allocator_t &other)
             : capacity(other.capacity) {
-            alloc(capacity, true);
+            set_size(capacity, true);
         }
 
         heap_allocator_t &operator=(const heap_allocator_t &other) {
@@ -100,7 +101,7 @@ namespace utils {
             this->~heap_allocator_t();
             capacity = other.capacity;
             del = true;
-            alloc(capacity, true);
+            set_size(capacity, true);
             return *this;
         }
 
@@ -122,7 +123,7 @@ namespace utils {
             return *this;
         }
 
-        void alloc(const size_t size, const bool direct = false) {
+        void set_size(const size_t size, const bool direct = false) {
             if (direct) {
                 capacity = size;
                 mem = realloc(mem, capacity);

@@ -123,17 +123,21 @@ namespace utils {
         }
     };
 
+    template<typename T>
+    using comparator_t = int (*) (T *a, T *b);
+
     /** There are three type of insert functions:
      * - emplace - creates new object in new cell with a move constructor
      * - push - creates new object in new cell with a copy constructor
      * - place - creates new object in old cell with a move constructor
      */
-    template<typename T, typename A = heap_allocator_t<>, typename C = container_t<T> > requires allocator_c<A>
+    template<typename T, typename A = heap_allocator_t<>, typename C = container_t<T>, comparator_t<T> Cp = nullptr > requires allocator_c<A>
     struct vector_t {
         static_assert(sizeof(C) == sizeof(T));
 
         typedef T data_type;
         typedef C container_type;
+        typedef comparator_t<data_type> comparator_type;
 
         static constexpr container_type *container(data_type *data) {
             return reinterpret_cast<container_type *>(data);
@@ -242,7 +246,7 @@ namespace utils {
         }
 
         vector_t &trim() {
-            allocator.alloc(size, true);
+            allocator.set_size(size, true);
             return *this;
         }
 
@@ -300,7 +304,7 @@ namespace utils {
         }
 
         vector_t &set_size(const size_t desired_size) {
-            allocator.alloc(data_size * desired_size);
+            allocator.set_size(data_size * desired_size);
             return *this;
         }
 
@@ -322,11 +326,35 @@ namespace utils {
             return *this;
         }
 
+        template<comparator_type Cpl = nullptr>
+        vector_t &sort() {
+            static_assert(Cpl || Cp, "Comparator must be specified!");
+            comparator_type cp = Cpl ? Cpl : Cp;
+
+            for (addr_t i = 0; i < size; i++) {
+                data_type *overrider = this->operator[](i);
+
+                for (int j = i; j < size; j++) {
+                    if (cp(overrider, this->operator[](j)) > 0) {
+                        overrider = this->operator[](j);
+                    }
+                }
+
+                if (overrider != this->operator[](i)) {
+                    data_type tmp = std::move(get(i));
+                    get(i) = std::move(*overrider);
+                    *overrider = std::move(tmp);
+                }
+            }
+
+            return *this;
+        }
+
         bool operator==(const vector_t<data_type> &other) const {
             if (other.size != size)
                 return false;
 
-            for (addr_t i = 0; i < size; ++i)
+            for (addr_t i = 0; i < size; i++)
                 if (*operator[](i) != *other[i])
                     return false;
 
@@ -337,7 +365,7 @@ namespace utils {
             if (other.size != size)
                 return false;
 
-            for (addr_t i = 0; i < size; ++i)
+            for (addr_t i = 0; i < size; i++)
                 if (*operator[](i) != *other[i])
                     return false;
 
